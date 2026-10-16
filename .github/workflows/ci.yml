@@ -20,4 +20,4 @@ jobs:
       - run: npm --prefix desktop run prepare:resources
       - run: npm --prefix desktop test
       - run: npm run test:browser
-      - run: node desktop/ocr-test.cjs
+      - run: node desktop/ocr-test.cjs --engine-only

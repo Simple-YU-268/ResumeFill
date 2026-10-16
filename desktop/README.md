@@ -67,3 +67,5 @@ npm run dist
 构建使用运行文件白名单，不包含 `resume.json`、个人工作区、令牌、测试资料。安装包输出至 `resume-fill/dist/desktop/`。依赖版本由 package-lock.json 锁定。
 
 桌面页面使用 sandbox、contextIsolation，关闭 nodeIntegration，预加载层只暴露固定 IPC 操作；本地服务仅监听回环地址，对扩展请求检查 Host、Origin 和访问令牌。
+
+CI 使用 `node desktop/ocr-test.cjs --engine-only` 验证真实离线识别、混合页、强制模式与取消，不依赖无人值守环境的桌面图形会话。完整桌面交互和扫描件到 JSON 的流程使用 `node desktop/ocr-test.cjs`，并在实际打包程序上另行验证。
