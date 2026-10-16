@@ -3,6 +3,9 @@
   globalThis.__resumeFillV2=true;
   const C=ResumeControls,A=ResumeAdapters;
   let registry=new Map(),activeAdapter=null,revision=0,busy=false,scannedUrl='',operationController=null;
+  let mutations=0;new MutationObserver(()=>mutations++).observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});
+  const ocrLabels=new WeakMap();const viewport=()=>({url:location.href,width:innerWidth,height:innerHeight,scrollX,scrollY,scale:visualViewport?.scale||1,offsetX:visualViewport?.offsetLeft||0,offsetY:visualViewport?.offsetTop||0,mutations});
+  function ocrContext(){return {viewport:viewport(),fields:Array.from(registry.values()).map(d=>({...d.field,position:(()=>{const r=d.el.getBoundingClientRect();return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)};})()})).filter(f=>f.position.x>=0&&f.position.y>=0&&f.position.x+f.position.width<=innerWidth&&f.position.y+f.position.height<=innerHeight).map(f=>({id:f.id,stableId:f.stableId,label:f.label,ocrEligible:f.ocrEligible,position:f.position}))};}
   const stableIds=new WeakMap(),lastDescriptors=new WeakMap();let nextStableId=0;
   const eligible=el=>!el.disabled&&el.getAttribute('aria-disabled')!=='true'&&ResumeLayout.visible(el)&&!['hidden','password','file','submit','button','reset','checkbox'].includes(el.type);
   const query=(scope,selector)=>selector?Array.from(scope.querySelectorAll(selector)):[];
@@ -66,6 +69,8 @@
         field.datePart=structural.datePart;field.datePath=structural.datePath;if(field.datePart)field.label='出生日期 · '+({year:'年',month:'月',day:'日'}[field.datePart]);
         if(structural.label&&!config.label&&!labels.length)field.evidence=structural.evidence;
         if(field.regionLevel)field.label=label+' · '+({province:'省',city:'市',county:'区县'}[field.regionLevel]);
+        field.ocrEligible=!config.label&&!config.path&&!labels.length&&!linked&&!el.getAttribute('aria-label')&&!structural.label&&!containerLabels.length&&!inferred.label&&!field.datePart;
+        const approved=ocrLabels.get(el);if(field.ocrEligible&&approved&&JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)})){field.label=approved.label;field.tokens=[approved.label];field.evidence='本地 OCR（已人工确认）';d.ocrGuard=()=>{const r=el.getBoundingClientRect();return JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)});};}
         field.stableId=stableIds.get(el);field.position={x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)};
         const previous=lastDescriptors.get(el);if(previous&&previous.type===d.type){d.optionConfirmed=previous.optionConfirmed;d.selectedPath=previous.selectedPath;}
         const entry={...d,scanUrl:location.href,field,sectionScope:s};lastDescriptors.set(el,entry);registry.set(id,entry);fields.push(field);
@@ -132,10 +137,13 @@
   };
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message.type==='RF_CANCEL'){operationController?.abort();respond({cancelled:true});return;}
-    if(!['RF_SCAN','RF_FILL','RF_VERIFY','RF_PREPARE'].includes(message.type))return;
+    if(!['RF_SCAN','RF_FILL','RF_VERIFY','RF_PREPARE','RF_OCR_CONTEXT','RF_OCR_APPLY','RF_OCR_HIGHLIGHT'].includes(message.type))return;
     if(busy){respond({error:'上一项操作尚未结束'});return;}
     busy=true;
     (async()=>{
+      if(message.type==='RF_OCR_CONTEXT')return ocrContext();
+      if(message.type==='RF_OCR_HIGHLIGHT'){if(JSON.stringify(message.context)!==JSON.stringify(ocrContext())||!registry.has(message.id))throw Error('页面已变化，请重新识别');registry.get(message.id).el.animate([{outline:'3px solid #0d8b68',outlineOffset:'3px'},{outline:'3px solid transparent',outlineOffset:'3px'}],{duration:1800});return {highlighted:true};}
+      if(message.type==='RF_OCR_APPLY'){if(JSON.stringify(message.context)!==JSON.stringify(ocrContext()))throw Error('页面已变化，OCR 建议失效');if(!Array.isArray(message.items)||message.items.length>200)throw Error('OCR 建议无效');for(const item of message.items){const d=registry.get(item.id);if(!d?.field.ocrEligible||typeof item.label!=='string'||!item.label.trim()||item.label.length>40||/密码|验证码|password|captcha|\botp\b/i.test(item.label))throw Error('OCR 不能覆盖现有标签或保护字段');}for(const item of message.items){const d=registry.get(item.id);ocrLabels.set(d.el,{label:item.label,position:d.field.position,viewport:viewport()});}return {approved:message.items.length};}
       if(message.type==='RF_SCAN')return scan(message.adapters,message.counts);
       if(message.type==='RF_PREPARE')return prepare(message.counts||{});
       if(message.type==='RF_FILL')return fill(message);

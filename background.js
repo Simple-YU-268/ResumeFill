@@ -45,3 +45,5 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 
 importScripts('agent-bridge.js');
 importScripts('desktop-bridge.js');
+
+importScripts('web-ocr-match.js','web-ocr-bridge.js');

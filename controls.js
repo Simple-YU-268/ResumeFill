@@ -5,7 +5,7 @@
   const visible=el=>!!el?.isConnected&&ResumeLayout.visible(el);
   const list=(scope,selector)=>Array.from(scope.querySelectorAll(selector)).filter(visible);
   const enabled=o=>!o.disabled&&!o.closest?.('optgroup[disabled]')&&o.getAttribute('aria-disabled')!=='true'&&!o.matches?.('.is-disabled,.ant-select-item-option-disabled,.el-select-dropdown__item--disabled');
-  function guard(d){if(d.signal?.aborted||!visible(d.el)||d.scanUrl&&location.href!==d.scanUrl)throw Error('操作已取消或字段/页面已变化');}
+  function guard(d){if(d.ocrGuard&&!d.ocrGuard())throw Error('OCR 确认后页面已变化，请重新扫描核对');if(d.signal?.aborted||!visible(d.el)||d.scanUrl&&location.href!==d.scanUrl)throw Error('操作已取消或字段/页面已变化');}
   const menuSelector='[role="listbox"],.ant-select-dropdown,.el-select-dropdown,.el-select__popper,.ivu-select-dropdown';
   function menus(doc){return list(doc,menuSelector).filter(n=>!n.parentElement?.closest(menuSelector));}
   function associatedMenu(d){
@@ -51,6 +51,7 @@
     if(!/YYYY/.test(format))return parsed.iso;return p.formatDate(value,format);
   }
   async function verify(d,value){
+    if(d.ocrGuard&&!d.ocrGuard())return {status:'stale',error:'OCR 确认后页面已变化，请重新核对'};
     if(d.signal?.aborted)return {status:'failed',error:'操作已取消'};
     if(!visible(d.el)||d.scanUrl&&location.href!==d.scanUrl)return {status:'stale',error:'字段或页面已变化，请重新扫描'};
     if(invalid(d))return {status:'invalid',error:d.el.validationMessage||'页面标记该字段无效'};

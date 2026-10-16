@@ -13,7 +13,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
  const originAllowed=o=>!o||/^chrome-extension:\/\/[a-p]{32}$/.test(o)&&(!allowed.length||allowed.includes(o.split('://')[1]));
  const auth=req=>{const provided=String(req.headers.authorization||''),expected='Bearer '+config.token;const a=Buffer.from(provided),b=Buffer.from(expected);return a.length===b.length&&crypto.timingSafeEqual(a,b);};
  const send=(res,status,data)=>{if(res.destroyed||res.writableEnded)return;res.writeHead(status,{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
- async function body(req){return await new Promise((resolve,reject)=>{let data='',bytes=0;req.setEncoding('utf8');req.on('data',chunk=>{bytes+=Buffer.byteLength(chunk);if(bytes>200000){data='';reject(Object.assign(Error('请求过大'),{status:413}));return;}data+=chunk;});req.on('end',()=>{try{resolve(JSON.parse(data));}catch{reject(Object.assign(Error('请求不是有效 JSON'),{status:400}));}});req.on('error',reject);});}
+ async function body(req,limit=200000){return await new Promise((resolve,reject)=>{let data='',bytes=0;req.setEncoding('utf8');req.on('data',chunk=>{bytes+=Buffer.byteLength(chunk);if(bytes>limit){data='';reject(Object.assign(Error('请求过大'),{status:413}));return;}data+=chunk;});req.on('end',()=>{try{resolve(JSON.parse(data));}catch{reject(Object.assign(Error('请求不是有效 JSON'),{status:400}));}});req.on('error',reject);});}
  function fieldPacket(p){if(!p||p.version!==1||!Array.isArray(p.fields)||!Array.isArray(p.candidates))throw Error('字段请求结构无效');const values=Object.fromEntries(p.candidates.map(c=>[c.path,p.shareValues?c.value:'present']));AI.validatePacket(p,values);if(p.candidates.some(c=>!/^([\w\u4e00-\u9fff-]+\.)*[\w\u4e00-\u9fff-]+$/.test(c.path)||c.path.split('.').some(s=>['__proto__','constructor','prototype'].includes(s))))throw Error('候选路径无效');return p;}
  async function upstreamCall(kind,packet,signal){
   const modelBody=kind==='fields'?AI.requestBody(upstream,packet):{model:upstream.model,messages:[{role:'system',content:Options.system},{role:'user',content:JSON.stringify(packet)}],stream:false,...upstream.jsonMode?{response_format:{type:'json_object'}}:{}};
@@ -34,12 +34,14 @@ function createGateway(config,{fetchImpl=fetch}={}){
   if(req.method==='GET'&&req.url==='/health'){send(res,200,{ok:true,version:VERSION,identity:'ResumeFillAgent',engine:upstream?'upstream':'local-rules',active,cacheEntries:cache.size});return;}
   const agentAction=req.url?.match(/^\/v1\/agent\/(start|result|error|resume|cancel|status)$/)?.[1];
   const desktopAction=config.desktopHandler&&req.url?.match(/^\/v1\/desktop\/(heartbeat|pull|push)$/)?.[1];
-  if(req.method!=='POST'||!agentAction&&!desktopAction&&!['/v1/chat/completions','/v1/match-fields','/v1/match-options'].includes(req.url)){send(res,404,{error:'接口不存在'});return;}
+  const webOCR=req.url==='/v1/ocr/web'&&typeof config.webOCR==='function';
+  if(req.method!=='POST'||!agentAction&&!desktopAction&&!webOCR&&!['/v1/chat/completions','/v1/match-fields','/v1/match-options'].includes(req.url)){send(res,404,{error:'接口不存在'});return;}
   if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){send(res,415,{error:'仅接受 application/json'});return;}
   if(active>=4){send(res,429,{error:'本地服务忙，请稍后重试'});return;}active++;
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);res.on('close',()=>{if(!res.writableEnded)controller.abort();});
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),webOCR?90000:timeout);res.on('close',()=>{if(!res.writableEnded)controller.abort();});
   try{
-   const input=await body(req);
+   const input=await body(req,webOCR?11200000:200000);
+   if(webOCR){send(res,200,await config.webOCR(input,{signal:controller.signal}));return;}
    if(desktopAction){send(res,200,await config.desktopHandler(desktopAction,input));return;}
    if(agentAction){let state;if(agentAction==='start')state=agent.create(input);else if(agentAction==='status')state=agent.view(agent.get(input.sessionId));else if(agentAction==='result')state=agent.result(input.sessionId,input);else if(agentAction==='error')state=agent.toolError(input.sessionId,input);else if(agentAction==='resume')state=agent.resume(input.sessionId,input);else state=agent.cancel(input.sessionId);send(res,200,{agent:state});return;}
    let packet=input,kind=req.url==='/v1/match-options'?'options':'fields';
@@ -53,7 +55,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
     if(controller.signal.aborted)throw Error('请求已取消');if(maxCache&&ttl){cache.delete(cacheKey);cache.set(cacheKey,{at:Date.now(),result});while(cache.size>maxCache)cache.delete(cache.keys().next().value);}
    }
    const gateway={engine:upstream?'upstream':'local-rules',cacheHit,version:VERSION};send(res,200,req.url==='/v1/chat/completions'?{model:upstream?.model||'resumefill-local',choices:[{message:{role:'assistant',content:JSON.stringify(result)}}],gateway}:{...result,gateway});
-  }catch(e){send(res,controller.signal.aborted?504:(e.status||400),{error:controller.signal.aborted?'本地请求已取消或超时':(/上游/.test(e.message)?e.message:'匹配请求无效或无法完成')});}
+  }catch(e){send(res,controller.signal.aborted?504:(e.status||400),{error:controller.signal.aborted?'本地请求已取消或超时':webOCR?String(e.message).slice(0,120):(/上游/.test(e.message)?e.message:'匹配请求无效或无法完成')});}
   finally{clearTimeout(timer);active--;}
  });
  server.headersTimeout=5000;server.requestTimeout=15000;

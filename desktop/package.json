@@ -1,6 +1,6 @@
 {
   "name": "resumefill-desktop",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "ResumeFill dedicated application agent",
   "author": "ResumeFill",
   "main": "main.cjs",
@@ -29,7 +29,9 @@
       "controller.cjs",
       "ui/**/*",
       "pdf-service.cjs",
-      "pdf-worker.cjs"
+      "pdf-worker.cjs",
+      "web-ocr.cjs",
+      "web-ocr-worker.cjs"
     ],
     "extraResources": [
       {
@@ -53,6 +55,7 @@
     ]
   },
   "dependencies": {
+    "@napi-rs/canvas": "0.1.80",
     "pdf-parse": "2.4.5",
     "tesseract.js": "7.0.0"
   },

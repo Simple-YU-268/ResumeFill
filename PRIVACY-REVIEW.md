@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.11.0 on 2026-10-16.
+Reviewed for v0.12.0 on 2026-10-16.
 
 The development workspace contains private files. This review applies only to the Git publication inventory and freshly built release runtime, not to every file elsewhere on the machine.
 
@@ -20,3 +20,5 @@ For the local review, the scanner was also given an external private reference f
 `npm run privacy:artifacts` additionally inspects first-party source in the built ASAR and allowlisted gateway/extension runtime resources. Binary attachments are freshly built from this reviewed source; old local packages and screenshots are not release attachments.
 
 These checks supplement source and staged-diff review. Pattern matching cannot prove the absence of every possible personal fact or credential. Contributors must rerun the checks and inspect outgoing changes before publishing.
+
+Webpage OCR screenshots are sent only to the authenticated local desktop endpoint on explicit user action, processed in memory, and not included in Git, logs or release assets. The screenshot is not sent to an external model. Input-region masking reduces OCR of existing form values; it is not a complete redaction of all personal content visible on the page.

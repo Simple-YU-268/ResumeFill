@@ -1,4 +1,5 @@
 const {app,BrowserWindow,ipcMain,dialog,shell,clipboard}=require('electron');const fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');const {Controller}=require('./controller.cjs');let controller,window,pendingPDF=null,pdfBusy=false,pdfController=null;
+if(process.env.RF_DESKTOP_DATA){fs.mkdirSync(process.env.RF_DESKTOP_DATA,{recursive:true});app.setPath('userData',process.env.RF_DESKTOP_DATA);}
 if(!app.requestSingleInstanceLock())app.quit();else{
 app.on('second-instance',()=>{window?.show();window?.focus();});
 app.whenReady().then(async()=>{
