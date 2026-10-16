@@ -6,3 +6,7 @@ const files=['manifest.json','background.js','agent-bridge.js','desktop-bridge.j
 for(const f of files)fs.copyFileSync(path.join(source,f),path.join(extension,f));fs.cpSync(path.join(source,'data'),path.join(extension,'data'),{recursive:true});
 for(const f of ['ai.js','matcher.js','option-match.js'])fs.copyFileSync(path.join(source,f),path.join(dest,f));fs.mkdirSync(path.join(dest,'local-server'),{recursive:true});for(const f of ['server.cjs','agent.cjs'])fs.copyFileSync(path.join(source,'local-server',f),path.join(dest,'local-server',f));
 console.log('Packaged only allowlisted runtime files; no personal profile or credentials.');
+
+const ocrData=path.join(dest,'ocr-data');fs.mkdirSync(ocrData,{recursive:true});for(const lang of ['eng','chi_sim','chi_tra']){const pkg=path.dirname(require.resolve('@tesseract.js-data/'+lang+'/package.json'));fs.copyFileSync(path.join(pkg,'4.0.0_best_int',lang+'.traineddata.gz'),path.join(ocrData,lang+'.traineddata.gz'));}
+
+fs.writeFileSync(path.join(ocrData,'NOTICE.txt'),'Local OCR uses Tesseract.js and tesseract.js-core (Apache-2.0). Language packages @tesseract.js-data/eng, chi_sim and chi_tra version 1.0.0 declare MIT. Data variant: 4.0.0_best_int. See https://github.com/naptha/tessdata and https://github.com/naptha/tesseract.js .');

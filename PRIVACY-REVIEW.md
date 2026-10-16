@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.10.1 on 2026-10-16.
+Reviewed for v0.11.0 on 2026-10-16.
 
 The development workspace contains private files. This review applies only to the Git publication inventory and freshly built release runtime, not to every file elsewhere on the machine.
 
@@ -8,7 +8,7 @@ The development workspace contains private files. This review applies only to th
 
 - Only this standalone repository is published. External research folders, candidate documents, job-tracking records and browser profiles are outside its scope.
 - Personal resume JSON, images, PDFs, checkpoints, local configuration, connection tokens, logs, installed dependencies and build outputs are ignored by Git. Ignored files must never be force-added.
-- Tests use synthetic candidates and temporary directories. Machine-specific home-directory paths have been replaced with portable dependencies or environment configuration.
+- Tests use synthetic candidates and temporary directories, including generated image-only PDFs for real offline OCR tests. Machine-specific home-directory paths have been replaced with portable dependencies or environment configuration.
 - Runtime resources use an explicit file allowlist. Personal profile and connection files are created in user data after installation and are not bundled.
 
 ## Checks
