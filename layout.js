@@ -31,18 +31,23 @@
     const clean=n=>(n?.innerText||n?.textContent||'').replace(/\s+/g,' ').replace(/[*＊:：]|必填|选填/g,'').trim();
     const cell=el.closest('td,th');let tableLabel='',annotation='';
     if(cell){for(let prev=cell.previousElementSibling;prev;prev=prev.previousElementSibling){const value=clean(prev);if(value&&value.length<=80&&!prev.querySelector('input,textarea,select,[contenteditable=true]')){if(/^[（(]/.test(value)){annotation||=value;continue;}tableLabel=value;break;}}tableLabel||=annotation;}
+    const definition=el.closest('dd');const term=definition?.previousElementSibling;const definitionLabel=term?.matches('dt')&&visible(term)?clean(term):'';
     const container=el.closest('.el-form-item,.ant-form-item,.form-item,.form-row,.layui-form-item,[data-field-label]');
     const labels=container?Array.from(container.querySelectorAll('label,.field-label,.layui-form-label')).filter(n=>visible(n)&&!n.querySelector('input,select,textarea')).map(clean).filter(Boolean):[];
-    const label=el.getAttribute('data-label')||container?.getAttribute('data-field-label')||labels[0]||tableLabel;
+    const radioGroup=el.type==='radio'?el.closest('[role="radiogroup"],fieldset'):el.matches('[role="radiogroup"]')?el:null;
+    const groupIds=(radioGroup?.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean).map(id=>el.ownerDocument.getElementById(id)).filter(n=>n&&visible(n));
+    const groupLabel=radioGroup?(radioGroup.getAttribute('aria-label')||groupIds.map(clean).join(' ')||clean(radioGroup.querySelector(':scope > legend'))):'';
+    const label=groupLabel||el.getAttribute('data-label')||container?.getAttribute('data-field-label')||labels[0]||tableLabel||definitionLabel;
     const roleText=label||clean(el.closest('fieldset')?.querySelector('legend'));
     const regionRole=/户籍|户口/.test(roleText)?'hukou':/籍贯/.test(roleText)?'native':/现居|居住地|居住地址/.test(roleText)?'current':null;
     const technical=(el.name||'')+' '+(el.id||'');
-    const level=/\b(?:province|sheng)[-_]/i.test(technical)?'province':/\b(?:city|shi)[-_]/i.test(technical)?'city':/\b(?:county|district|qu)[-_]/i.test(technical)?'county':null;
+    const regionHint=el.getAttribute('data-region-level')||el.getAttribute('aria-label')||el.placeholder||(el.matches('select')?el.options[0]?.textContent:'')||'';
+    const level=/\b(?:province|sheng)[-_]/i.test(technical)||/^(请选择)?(省|省份|省\/直辖市)$|^province$/i.test(regionHint.trim())?'province':/\b(?:city|shi)[-_]/i.test(technical)||/^(请选择)?(市|城市|地级市)$|^city$/i.test(regionHint.trim())?'city':/\b(?:county|district|qu)[-_]/i.test(technical)||/^(请选择)?(区|县|区县|区\/县)$|^(county|district)$/i.test(regionHint.trim())?'county':null;
     const dateContainer=el.closest('[data-date-group],.date-group,.birthday-group')||container||cell;
     const groupText=clean(dateContainer?.querySelector('legend,label,.field-label'))||tableLabel||label;
     const dateHint=el.matches('select')?el.options[0]?.textContent||'':'';
     const datePart=el.matches('select')&&/出生|生日/.test(groupText)?(/year|nian/i.test(technical)||el.getAttribute('data-date-part')==='year'||/年份|^年$/.test(dateHint)?'year':/month|yue/i.test(technical)||el.getAttribute('data-date-part')==='month'||/月份|^月$/.test(dateHint)?'month':/day|ri_/i.test(technical)||el.getAttribute('data-date-part')==='day'||/日期|^日$/.test(dateHint)?'day':null):null;
-    return {label:label||'',context:tableLabel||'',regionRole,regionLevel:regionRole?level:null,datePart,datePath:datePart?'basics.birthday':null,evidence:tableLabel?'表格同行标签':'表单容器标签'};
+    return {label:label||'',groupLabel,context:tableLabel||'',regionRole,regionLevel:regionRole?level:null,datePart,datePath:datePart?'basics.birthday':null,evidence:groupLabel?'单选组可见标签':tableLabel?'表格同行标签':definitionLabel?'定义列表标签':'表单容器标签'};
   }
   root.ResumeLayout={visible,distance,collect,infer,associate};
   if(typeof module!=='undefined')module.exports=root.ResumeLayout;

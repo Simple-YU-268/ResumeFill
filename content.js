@@ -11,7 +11,7 @@
   const query=(scope,selector)=>selector?Array.from(scope.querySelectorAll(selector)):[];
   const shown=(scope,selector)=>query(scope,selector).filter(ResumeLayout.visible);
   const text=el=>{if(!el)return '';let raw;if(el.matches?.('label')){const copy=el.cloneNode(true);copy.querySelectorAll('input,select,textarea,[role="combobox"],button').forEach(n=>n.remove());raw=copy.textContent;}else raw=el.innerText||el.textContent||'';return raw.replace(/[*＊:：]|必填|选填/g,'').trim();};
-  const kind=el=>el.isContentEditable?'contenteditable':el.tagName==='SELECT'?'select':el.type==='radio'?'radio':el.matches('[role="combobox"],.el-select,.ant-select')?'combobox':['date','month','datetime-local'].includes(el.type)?'date':'input';
+  const kind=el=>el.isContentEditable?'contenteditable':el.tagName==='SELECT'?'select':el.type==='radio'||el.matches('[role="radiogroup"]')?'radio':el.matches('[role="combobox"],.el-select,.ant-select')?'combobox':['date','month','datetime-local'].includes(el.type)?'date':'input';
   function scopes(adapter){
     if(adapter){const out=[];for(const config of adapter.sections){const roots=shown(document,config.selector);if(roots.length!==1){out.push({config,key:config.key,error:'模块选择器未唯一命中'});continue;}const root=roots[0],cards=config.cardSelector?query(root,config.cardSelector):[root];cards.forEach((scope,index)=>out.push({config,key:config.key,root,scope,index:config.cardSelector?index:null}));if(!cards.length)out.push({config,key:config.key,root,error:'没有经历卡片，请先补齐经历'});}return out;}
     return [{scope:document,root:document,key:null,index:null,config:{}}];
@@ -41,7 +41,7 @@
     const visibleText=ResumeLayout.collect(document);
     for(const s of scopes(activeAdapter)){
       if(s.error){sectionIssues.push({section:s.key,error:s.error});continue;}
-      const candidates=shown(s.scope,'[role="combobox"],.el-select,.ant-select,input,textarea,select,[contenteditable="true"]');
+      const candidates=shown(s.scope,'[role="radiogroup"],[role="combobox"],.el-select,.ant-select,input,textarea,select,[contenteditable="true"]');
       const used=new Set();
       const add=(el,config={})=>{
         const configuredControl=(['combobox','cascader','radio'].includes(config.type)||config.datePanel)&&!el.disabled&&ResumeLayout.visible(el);
@@ -57,7 +57,7 @@
         const containerLabels=container?shown(container,s.config.labelSelector||'label,.el-form-item__label,.ant-form-item-label,.field-label').map(text):[];
         const inferred=ResumeLayout.infer(el,visibleText,candidates);
         const structural=ResumeLayout.associate(el);
-        const label=config.label||labels[0]||linked||el.getAttribute('aria-label')||structural.label||containerLabels[0]||inferred.label||el.placeholder||el.name||el.id||'未命名字段';
+        const label=config.label||structural.groupLabel||labels[0]||linked||el.getAttribute('aria-label')||structural.label||containerLabels[0]||inferred.label||el.placeholder||el.name||el.id||'未命名字段';
         const tokens=[config.label,...labels,...containerLabels,inferred.label].filter(Boolean);
         const ctx=contextFor(el,s),id=`${revision}:f${registry.size}`;
         if(!stableIds.has(el))stableIds.set(el,'node-'+(++nextStableId));
@@ -72,7 +72,7 @@
         field.ocrEligible=!config.label&&!config.path&&!labels.length&&!linked&&!el.getAttribute('aria-label')&&!structural.label&&!containerLabels.length&&!inferred.label&&!field.datePart;
         const approved=ocrLabels.get(el);if(field.ocrEligible&&approved&&JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)})){field.label=approved.label;field.tokens=[approved.label];field.evidence='本地 OCR（已人工确认）';d.ocrGuard=()=>{const r=el.getBoundingClientRect();return JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)});};}
         field.stableId=stableIds.get(el);field.position={x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)};
-        const previous=lastDescriptors.get(el);if(previous&&previous.type===d.type){d.optionConfirmed=previous.optionConfirmed;d.selectedPath=previous.selectedPath;}
+        const previous=lastDescriptors.get(el);if(previous&&previous.type===d.type&&['label','section','recordIndex','context','path','regionRole','regionLevel','datePart','datePath'].every(key=>previous.field[key]===field[key])){d.optionConfirmed=previous.optionConfirmed;d.selectedPath=previous.selectedPath;}
         const entry={...d,scanUrl:location.href,field,sectionScope:s};lastDescriptors.set(el,entry);registry.set(id,entry);fields.push(field);
       };
       for(const config of s.config.fields||[]){const elements=shown(s.scope,config.selector);if(elements.length!==1){sectionIssues.push({section:s.key,recordIndex:s.index,error:`字段选择器未唯一命中：${config.label||config.path}`});continue;}add(elements[0],config);}

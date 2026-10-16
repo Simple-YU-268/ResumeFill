@@ -1,3 +1,3 @@
 const {spawnSync}=require('node:child_process'),path=require('node:path');
-const tests=process.argv.includes('--browser')?['browser-test.cjs','matching-browser-test.cjs','projects-test.cjs','controls-v06-test.cjs','enum-test.cjs','extension-test.cjs']:['test.cjs','ai-test.cjs','answers-test.cjs','profile-test.cjs','local-server/agent-test.cjs','local-server/test.cjs'];
+const tests=process.argv.includes('--browser')?['browser-test.cjs','matching-browser-test.cjs','projects-test.cjs','controls-v06-test.cjs','enum-test.cjs','competitor-regression-test.cjs','extension-test.cjs']:['test.cjs','ai-test.cjs','answers-test.cjs','profile-test.cjs','local-server/agent-test.cjs','local-server/test.cjs'];
 for(const file of tests){const result=spawnSync(process.execPath,[path.join(__dirname,'..',file)],{stdio:'inherit'});if(result.status!==0)process.exit(result.status||1);}console.log('PASS: '+tests.length+' test groups');

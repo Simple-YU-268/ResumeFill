@@ -12,7 +12,14 @@
     const id=d.el.getAttribute('aria-controls')||d.el.getAttribute('aria-owns')||d.el.querySelector('[aria-controls],[aria-owns]')?.getAttribute('aria-controls')||d.el.querySelector('[aria-owns]')?.getAttribute('aria-owns');
     if(id){const nodes=id.split(/\s+/).map(id=>d.el.ownerDocument.getElementById(id)).filter(visible);if(nodes.length!==1)return null;return nodes[0];}
     const choices=menus(d.el.ownerDocument);if(visible(d.menu)&&choices.includes(d.menu))return d.menu;const fresh=choices.filter(n=>!d.beforeMenus?.has(n));if(fresh.length===1)return fresh[0];if(fresh.length>1)throw Error('展开多个弹层，无法确定归属');
+    if(d.menuChanges&&!d.menuChangeOverflow){const anchor=d.el.getBoundingClientRect();const changed=choices.filter(n=>d.menuChanges.has(n)&&!n.contains(d.el)&&list(n,'[role="option"],.ant-select-item-option,.el-select-dropdown__item,.ivu-select-item').length>=2&&!n.querySelector('form,input,textarea,select,[role="grid"]')&&n.querySelectorAll('a[href]').length<2).filter(n=>{const r=n.getBoundingClientRect();return Math.min(r.right,anchor.right)>Math.max(r.left,anchor.left)&&Math.min(Math.abs(r.top-anchor.bottom),Math.abs(anchor.top-r.bottom))<100;});if(changed.length>1)throw Error('多个已有弹层同时变化，无法确定归属');if(changed.length===1)return changed[0];}
     return null;
+  }
+  function watchMenus(d){
+    d.menuChanges=new Set();d.menuChangeOverflow=false;
+    const observe=records=>{if(records.length>100){d.menuChangeOverflow=true;return;}for(const record of records){const node=record.target.nodeType===1?record.target:record.target.parentElement;const menu=node?.closest?.(menuSelector);if(menu)d.menuChanges.add(menu);if(d.menuChanges.size>16)d.menuChangeOverflow=true;}};
+    const observer=new MutationObserver(observe);observer.observe(d.el.ownerDocument.body,{subtree:true,attributes:true,childList:true,characterData:true});
+    return ()=>{observer.disconnect();d.menuChanges=null;};
   }
   function waitFor(fn,timeout=2500){return new Promise((resolve,reject)=>{const started=Date.now();const poll=()=>{let value;try{value=fn();}catch(e){reject(e);return;}if(value){resolve(value);return;}if(Date.now()-started>=timeout){reject(Error('等待页面状态超时'));return;}setTimeout(poll,60);};poll();});}
   function setValue(el,value){
@@ -29,6 +36,29 @@
   function uniqueOption(elements,value,d){
     const matches=elements.filter(o=>enabled(o)&&(optionKey(o.textContent,d)===optionKey(value,d)||norm(o.getAttribute('data-value')||o.value)===norm(value)));
     if(matches.length!==1)throw Error(matches.length?'选项不唯一，已停止':'没有匹配的真实选项');return matches[0];
+  }
+  // Enumerate indexed virtual lists before selecting: a visible hit alone cannot
+  // establish uniqueness across off-screen options. Unindexed lists stay manual.
+  async function virtualOption(d,value){
+    const menu=associatedMenu(d);if(!menu)return null;
+    const initial=options(d);if(!initial.length)return null;if(!initial.every(o=>o.hasAttribute('aria-posinset')&&o.hasAttribute('aria-setsize'))){if(initial.some(o=>o.hasAttribute('aria-posinset')||o.hasAttribute('aria-setsize'))||menu.querySelector('.rc-virtual-list,.cdk-virtual-scroll-viewport,[data-virtual-list]'))throw Error('虚拟列表缺少完整索引，请手动选择');return null;}
+    const scrolls=new Set();for(const option of initial){for(let p=option.parentElement;p&&menu.contains(p);p=p.parentElement){if(p.clientHeight>0&&p.scrollHeight>p.clientHeight+2&&/auto|scroll/.test(getComputedStyle(p).overflowY)){scrolls.add(p);break;}if(p===menu)break;}}
+    if(!scrolls.size)return null;if(scrolls.size!==1)throw Error('虚拟列表滚动区域不唯一');const scroller=[...scrolls][0];
+    const total=Number(initial[0].getAttribute('aria-setsize'));if(!Number.isInteger(total)||total<1||total>500)throw Error('虚拟列表条数未知或超过 500，请手动选择');
+    const indexed=new Map(),hits=new Map();
+    const signature=()=>JSON.stringify(options(d).map(o=>[o.getAttribute('aria-posinset'),o.textContent]));
+    const move=async top=>{guard(d);const before=signature();scroller.scrollTop=top;scroller.dispatchEvent(new Event('scroll',{bubbles:true}));await new Promise(r=>setTimeout(r,80));guard(d);if(signature()===before&&top!==0)await waitFor(()=>{guard(d);return signature()!==before;},600);};
+    await move(0);let exhausted=false;
+    for(let page=0;page<40;page++){
+      guard(d);const items=options(d);if(!items.length)throw Error('虚拟列表候选未就绪');
+      for(const o of items){const index=Number(o.getAttribute('aria-posinset'));if(!Number.isInteger(index)||index<1||index>total||Number(o.getAttribute('aria-setsize'))!==total)throw Error('虚拟列表索引或总数已变化');const text=o.textContent.trim(),state=JSON.stringify([text,o.getAttribute('data-value'),enabled(o)]);if(indexed.has(index)&&indexed.get(index)!==state)throw Error('虚拟列表内容已变化');indexed.set(index,state);if(enabled(o)&&(optionKey(text,d)===optionKey(value,d)||norm(o.getAttribute('data-value'))===norm(value)))hits.set(index,{top:scroller.scrollTop,state});}
+      const end=scroller.scrollHeight-scroller.clientHeight;if(scroller.scrollTop>=end-2){exhausted=true;break;}
+      const next=Math.min(end,scroller.scrollTop+Math.max(1,scroller.clientHeight*.75));if(next<=scroller.scrollTop)break;await move(next);
+    }
+    if(!exhausted||indexed.size!==total)throw Error('虚拟列表未完整枚举，请手动选择');
+    if(hits.size!==1)throw Error(hits.size?'虚拟列表存在重复选项，已停止':'虚拟列表没有匹配的真实选项');
+    const [index,hit]=[...hits][0];if(Math.abs(scroller.scrollTop-hit.top)>1)await move(hit.top);
+    return await waitFor(()=>{guard(d);const found=options(d).filter(o=>Number(o.getAttribute('aria-posinset'))===index);if(found.length>1)throw Error('虚拟列表索引不唯一');const o=found[0];if(!o)return false;if(JSON.stringify([o.textContent.trim(),o.getAttribute('data-value'),enabled(o)])!==hit.state)throw Error('虚拟列表目标已变化');return o;});
   }
   function read(d){
     if(d.type==='radio'){const checked=d.radios.find(r=>r.checked);return checked?(checked.labels?.[0]?.innerText||checked.value).trim():'';}
@@ -76,13 +106,16 @@
     }else if(d.type==='select'){
       const o=await waitFor(()=>{guard(d);const all=Array.from(d.el.options);const found=all.filter(o=>enabled(o)&&(optionKey(o.textContent,d)===optionKey(value,d)||norm(o.value)===norm(value)));if(found.length>1)throw Error('选项不唯一，已停止');return found[0];});guard(d);setValue(d.el,o.value);
     }else if(d.type==='combobox'){
-      d.optionConfirmed=false;d.beforeMenus=new Set(menus(d.el.ownerDocument));d.el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));d.el.click();
+      d.optionConfirmed=false;d.beforeMenus=new Set(menus(d.el.ownerDocument));const stopWatching=watchMenus(d);try{d.el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));d.el.click();
       const search=d.config?.searchInputSelector?list(d.scope,d.config.searchInputSelector):d.el.matches('input')?[d.el]:list(d.el,'input');
       if(search.length>1)throw Error('搜索输入框不唯一');
       if(search[0]&&!search[0].readOnly)setValue(search[0],String(value));
       let stamp='',since=0;
-      const option=await waitFor(()=>{guard(d);const items=options(d,d.config?.optionsSelector).filter(enabled),signature=JSON.stringify(items.map(o=>o.textContent));if(signature!==stamp){stamp=signature;since=Date.now();return false;}if(Date.now()-since<120)return false;const exact=items.filter(o=>optionKey(o.textContent,d)===optionKey(value,d)||norm(o.getAttribute('data-value'))===norm(value));if(exact.length>1)throw Error('选项不唯一');return exact[0];});
+      await waitFor(()=>{guard(d);return options(d,d.config?.optionsSelector).length;});
+      const virtual=await virtualOption(d,value);
+      const option=virtual||await waitFor(()=>{guard(d);const items=options(d,d.config?.optionsSelector).filter(enabled),signature=JSON.stringify(items.map(o=>o.textContent));if(signature!==stamp){stamp=signature;since=Date.now();return false;}if(Date.now()-since<120)return false;const exact=items.filter(o=>optionKey(o.textContent,d)===optionKey(value,d)||norm(o.getAttribute('data-value'))===norm(value));if(exact.length>1)throw Error('选项不唯一');return exact[0];});
       guard(d);uniqueOption([option],value,d).click();d.optionConfirmed=true;
+      }finally{stopWatching();}
     }else if(d.type==='cascader'){
       const parts=String(value).split('>').map(x=>x.trim());
       if(parts.length!==d.config.levels.length)throw Error('地区需用 > 分隔，并与适配 levels 数量一致');
