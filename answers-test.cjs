@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict'),A=require('./answers.js'),M=require('./matcher.js');
+const page={origin:'http://example.test:8888',page:'/form/bizFormData.do'};
+const field={label:'证书编号',context:'资格证书',section:null,recordIndex:null,type:'input'};
+const resume=A.save({basics:{name:'测试'}},[{field,value:'ABC-123'}],page);
+const gender=A.save({basics:{gender:''}},[{field:{...field,label:'性别'},value:'女',path:'basics.gender'}],page);assert.equal(gender.basics.gender,'女');assert.equal(gender.fieldAnswers.length,0);
+const id=A.save({basics:{}},[{field:{...field,label:'身份证号码'},value:'SYNTHETIC-ID',path:'basics.idNumber'}],page);assert.equal(id.basics.idNumber,'SYNTHETIC-ID');
+const hukou=A.save({basics:{}},[{field:{...field,label:'户籍所在地 · 市',regionRole:'hukou',regionLevel:'city'},value:'南京',path:'basics.hukou.city'}],page);assert.equal(hukou.basics.hukou.city,'南京');
+assert.equal(A.match(field,resume,page).path,'fieldAnswers.0.value');
+assert.equal(A.match(field,resume,{...page,origin:'https://other.test'}),null);
+assert.equal(A.match({...field,context:'其他证书'},resume,page),null);
+assert.equal(A.match({...field,recordIndex:1},resume,page),null);
+assert.deepEqual(M.flatten(resume),{'basics.name':'测试','fieldAnswers.0.value':'ABC-123'});
+const updated=A.save(resume,[{field,value:'NEW'}],page);assert.equal(updated.fieldAnswers.length,1);assert.equal(updated.fieldAnswers[0].value,'NEW');
+assert.throws(()=>A.save(resume,[{field:{...field,label:'验证码'},value:'123'}],page));
+assert.throws(()=>A.save(resume,[{field,value:'A'},{field,value:'B'}],page));
+assert.equal(resume.fieldAnswers[0].value,'ABC-123');
+const form={...page,url:page.origin+page.page+'?formId=A&token=secret'};const formResume=A.save(resume,[{field,value:'form A'}],form);assert.equal(A.match(field,formResume,form).path,'fieldAnswers.1.value');assert.equal(A.match(field,formResume,{...form,url:page.origin+page.page+'?formId=B'}),null);assert.ok(!JSON.stringify(formResume).includes('secret'));
+console.log('PASS: supplemental JSON answers, local matching, scope isolation, update without duplicates, metadata excluded, protected fields');

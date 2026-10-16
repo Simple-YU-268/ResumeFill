@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "adapters": [{
+    "id": "local-advanced-demo",
+    "hostnames": ["127.0.0.1", "localhost"],
+    "pathPrefix": "/demo-advanced.html",
+    "sections": [
+      {"key":"basics","title":"基本信息","selector":"#basics","fields":[
+        {"selector":"#full-name","path":"basics.name","label":"姓名"},
+        {"selector":"#email","path":"basics.email","label":"邮箱"},
+        {"selector":"#gender-group","path":"basics.gender","label":"性别","type":"radio"},
+        {"selector":"#city-combo","path":"basics.city","label":"城市","type":"combobox","searchInputSelector":"#city-search","optionsSelector":"#city-list [role=option]","readbackSelector":"#city-value"},
+        {"selector":"#region-combo","path":"basics.region","label":"地区","type":"cascader","readbackSelector":"#region-value","levels":[{"optionsSelector":"#region-panel [data-level='0'] button"},{"optionsSelector":"#region-panel [data-level='1'] button"}]}
+      ]},
+      {"key":"education","title":"教育经历","selector":"#education","cardSelector":".experience-card","addButton":".add-card","saveButton":".save-card","savedSelector":".saved-marker","timeoutMs":3000,"fields":[
+        {"selector":"[name=school]","path":"education.*.school","label":"学校"},
+        {"selector":"[name=major]","path":"education.*.major","label":"专业"},
+        {"selector":"[name=degree]","path":"education.*.degree","label":"学历","type":"select"},
+        {"selector":"[name=startDate]","path":"education.*.startDate","label":"入学时间","type":"date"},
+        {"selector":"[name=endDate]","path":"education.*.endDate","label":"毕业时间","type":"date"}
+      ]}
+    ]
+  }]
+}

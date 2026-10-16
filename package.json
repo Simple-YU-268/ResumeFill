@@ -1,0 +1,7 @@
+{
+  "name": "resumefill-agent", "version": "0.10.1", "private": true,
+  "description": "Local-first resume autofill agent and Windows desktop manager",
+  "license": "MIT", "engines": {"node": ">=22.13.0"},
+  "scripts": {"test": "node scripts/test.cjs", "test:browser": "node scripts/test.cjs --browser", "privacy": "node scripts/check-public-package.cjs", "privacy:artifacts": "node scripts/check-public-package.cjs --artifacts", "build": "npm --prefix desktop run dist"},
+  "devDependencies": {"playwright": "1.58.2"}
+}

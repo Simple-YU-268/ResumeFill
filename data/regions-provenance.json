@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/modood/Administrative-divisions-of-China",
+  "download": "https://raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/pca-code.json",
+  "datasetCutoff": "2023-06-30",
+  "retrieved": "2026-10-16",
+  "license": "WTFPL-2.0",
+  "sha256": "83b7536f853ad16beb4d37b92890a3fd7bb9d33d4f37e7c8885fb948749a9bc4",
+  "coverage": "31 provincial divisions in bundled source; not a current complete administrative registry"
+}

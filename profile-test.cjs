@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),P=require('./profile.js'),M=require('./matcher.js');P.setRegions(require('./data/regions.json'));
+assert.equal(P.resolveRegion('南京鼓楼').status,'resolved');assert.equal(P.resolveRegion('南京鼓楼').candidates[0].path,'江苏省 > 南京市 > 鼓楼区');
+assert.equal(P.resolveRegion('鼓楼').status,'ambiguous');assert.equal(P.resolveRegion('不存在地方').status,'unresolved');
+assert.equal(P.resolveRegion('北京东城').candidates[0].city,'北京市');
+const r=P.normalize({basics:{hukouAddress:'南京鼓楼',birthday:'2000年2月29日'}});assert.equal(r.resume.basics.hukou.county,'鼓楼区');assert.equal(r.resume.basics.hukouAddress,'南京鼓楼');assert.equal(r.resume.basics.birthday,'2000-02-29');
+assert.equal(r.resume._normalization.dates['basics.birthday'].raw,'2000年2月29日');
+const legacy=P.normalize({basics:{hukou:'南京鼓楼'}});assert.equal(legacy.resume.basics.hukou.county,'鼓楼区');assert.equal(legacy.resume.basics.hukouAddress,'南京鼓楼');
+assert.equal(P.parseDate('2001-02-29'),null);assert.equal(P.parseDate('2020-13'),null);assert.equal(P.parseDate('2020-09').precision,'month');assert.throws(()=>P.formatDate('2020-09','YYYY-MM-DD'));
+assert.equal(P.formatDate('2000-02-29','YYYY/MM/DD'),'2000/02/29');assert.equal(P.parseDate('20000229').iso,'2000-02-29');
+const values=M.flatten(r.resume);assert.equal(values['basics.birthdayParts.month'],'2');assert.ok(!Object.keys(values).some(k=>k.startsWith('_normalization')));
+const ambiguous={basics:{hukouAddress:'鼓楼'}};const candidate=P.resolveRegion('鼓楼').candidates.find(c=>c.city==='南京市');const confirmed=P.confirmRegion(ambiguous,'hukouAddress','鼓楼',candidate.path);assert.equal(P.normalize(confirmed).issues.length,0);
+assert.equal(P.normalize({basics:{hukouAddress:'南京鼓楼',hukou:{city:'上海市'}}}).issues[0].status,'conflict');
+console.log('PASS: regional enrichment, ambiguity, original preservation, explicit confirmation, conflicts, date precision, leap years, date parts');

@@ -1,0 +1,9 @@
+{
+  "basics": {"name":"示例姓名","email":"example@example.com","phone":"13800000000","city":"上海","gender":"","birthday":"","website":""},
+  "education": [{"school":"示例大学","major":"计算机科学与技术","degree":"本科","startDate":"2022-09","endDate":"2026-06","gpa":""}],
+  "work": [{"company":"示例公司","position":"产品实习生","startDate":"2025-06","endDate":"2025-09","description":"请替换为真实的实习职责和成果。"}],
+  "projects": [{"name":"示例项目","role":"开发者","description":"请替换为真实项目介绍。"}],
+  "skills":"JavaScript、Python",
+  "summary":"请填写个人简介。",
+  "custom": {}
+}

@@ -1,0 +1,53 @@
+{
+  "name": "resumefill-desktop",
+  "version": "0.10.1",
+  "description": "ResumeFill dedicated application agent",
+  "author": "ResumeFill",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "prepare:resources": "node prepare.cjs",
+    "dist": "npm run prepare:resources && electron-builder --win nsis --x64",
+    "test": "node test.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "local.resumefill.agent",
+    "productName": "ResumeFill Agent",
+    "directories": {
+      "output": "../dist/desktop"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "controller.cjs",
+      "ui/**/*",
+      "pdf-service.cjs",
+      "pdf-worker.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "agent"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "ResumeFill-Agent-${version}-Setup.${ext}"
+    }
+  },
+  "dependencies": {
+    "pdf-parse": "2.4.5"
+  },
+  "license": "MIT"
+}
