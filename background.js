@@ -8,14 +8,14 @@ async function matchAI(message){
   if(!await chrome.permissions.contains({origins:[config.originPattern]}))throw Error('尚未授权访问此 AI 服务，请重新保存 AI 设置');
   const values=ResumeMatcher.flatten(resume||{});
   const optionMode=message.type==='RF_AI_OPTION';
-  const packet=optionMode?ResumeOptionMatch.validate(message.packet,values):message.type==='RF_AI_TEST'?{version:1,shareValues:false,fields:[{id:'test-email',label:'联系电子信箱',section:'basics',recordIndex:null,type:'input',options:[]}],candidates:[{path:'basics.email'}]}:ResumeAI.validatePacket(message.packet,values);
+  const packet=optionMode?ResumeOptionMatch.validate(message.packet,values):message.type==='RF_AI_TEST'?{version:1,shareValues:false,fields:[{id:'test-email-'+crypto.randomUUID(),label:'联系电子信箱',section:'basics',recordIndex:null,type:'input',options:[]}],candidates:[{path:'basics.email'}]}:ResumeAI.validatePacket(message.packet,values);
   const {aiApiKey}=await chrome.storage.session.get('aiApiKey');
   const controller=new AbortController(),requestId=message.requestId;
   if(typeof requestId!=='string'||requestId.length>100)throw Error('请求 ID 无效');
   requests.get(requestId)?.abort();requests.set(requestId,controller);
   const timer=setTimeout(()=>controller.abort(),25000);
   try{
-    const response=await fetch(config.endpoint,{method:'POST',headers:{'Content-Type':'application/json',...aiApiKey?{Authorization:'Bearer '+aiApiKey}:{}},body:JSON.stringify(optionMode?{model:config.model,messages:[{role:'system',content:ResumeOptionMatch.system},{role:'user',content:JSON.stringify(packet)}],stream:false,...config.jsonMode?{response_format:{type:'json_object'}}:{}}:ResumeAI.requestBody(config,packet)),signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store'});
+    const response=await fetch(config.endpoint,{method:'POST',headers:{'Content-Type':'application/json',...aiApiKey?{Authorization:'Bearer '+aiApiKey}:{}},body:JSON.stringify(optionMode?{...ResumeAI.requestOptions(config),model:config.model,messages:[{role:'system',content:ResumeOptionMatch.system},{role:'user',content:JSON.stringify(packet)}],stream:false,...config.jsonMode?{response_format:{type:'json_object'}}:{}}:ResumeAI.requestBody(config,packet)),signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store'});
     if(!response.ok)throw Error('AI 服务返回 HTTP '+response.status+'，请检查地址、模型、密钥及额度');
     const length=Number(response.headers.get('content-length')||0);if(length>300000)throw Error('AI 响应超过大小限制');
     const reader=response.body.getReader(),decoder=new TextDecoder();let raw='',bytes=0;

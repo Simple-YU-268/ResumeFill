@@ -17,6 +17,8 @@ safe(async()=>{const {aiSettings={}}=await chrome.storage.local.get('aiSettings'
 $('saveAI').onclick=()=>safe(async()=>{
   const config=ResumeAI.settings({enabled:$('aiEnabled').checked,endpoint:$('aiEndpoint').value,model:$('aiModel').value,jsonMode:$('aiJson').checked});
   if(config.enabled&&!await chrome.permissions.request({origins:[config.originPattern]}))throw Error('服务域名未授权，未保存设置');
+  const {aiSettings:previous}=await chrome.storage.local.get('aiSettings');
+  if(config.enabled&&(!previous?.endpoint||new URL(previous.endpoint).origin!==new URL(config.endpoint).origin))await chrome.storage.session.remove('aiApiKey');
   await chrome.storage.local.set({aiSettings:config});
   if($('aiKey').value){await chrome.storage.session.set({aiApiKey:$('aiKey').value});$('aiKey').value='';}
   status(config.enabled?'AI 已启用；默认只发送字段描述与 JSON 路径。':'AI 已关闭');
@@ -29,3 +31,5 @@ const desktopActions=document.createElement('div');desktopActions.className='act
 for(const [label,type]of [['从桌面端读取资料','RF_DESKTOP_PULL'],['将扩展已保存资料同步到桌面','RF_DESKTOP_PUSH']]){const button=document.createElement('button');button.textContent=label;button.onclick=()=>safe(async()=>{const r=await chrome.runtime.sendMessage({type});if(r?.error)throw Error(r.error);if(type==='RF_DESKTOP_PULL'){$('json').value=JSON.stringify(r.resume,null,2);status('桌面资料已载入编辑器，核对后点击保存简历。');}else status('扩展中已保存的资料已同步到桌面。');});desktopActions.append(button);}$('status').before(desktopActions);
 setInterval(()=>chrome.runtime.sendMessage({type:'RF_DESKTOP_HEARTBEAT'}).catch(()=>{}),30000);
 chrome.runtime.sendMessage({type:'RF_DESKTOP_HEARTBEAT'}).catch(()=>{});
+
+$('aiProvider').onchange=()=>{const t={openrouter:['https://openrouter.ai/api/v1/chat/completions','qwen/qwen3.8-flash'],deepseek:['https://api.deepseek.com/chat/completions','deepseek-flash'],kimi:['https://api.moonshot.cn/v1/chat/completions','kimi-k2.6'],openai:['https://api.openai.com/v1/chat/completions','gpt-4.1-mini']}[$('aiProvider').value];if(!t)return;$('aiEndpoint').value=t[0];$('aiModel').value=t[1];$('aiEnabled').checked=true;$('aiJson').checked=true;$('aiKey').value='';status('模板已载入，请填写该服务商的 API 密钥，保存并测试。');};

@@ -1,6 +1,6 @@
 {
   "name": "resumefill-desktop",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "ResumeFill dedicated application agent",
   "author": "ResumeFill",
   "main": "main.cjs",
@@ -8,7 +8,7 @@
     "start": "electron .",
     "prepare:resources": "node prepare.cjs",
     "dist": "npm run prepare:resources && electron-builder --win nsis --x64",
-    "test": "node test.cjs"
+    "test": "node test.cjs && node model-test.cjs"
   },
   "devDependencies": {
     "@tesseract.js-data/chi_sim": "1.0.0",

@@ -17,3 +17,9 @@ assert.throws(()=>AI.settings({enabled:true,endpoint:'https://example.com/v1?key
 const config=AI.settings({enabled:true,endpoint:'http://127.0.0.1:1234/v1/chat/completions',model:'mock',jsonMode:true});
 assert.equal(AI.requestBody(config,packet).response_format.type,'json_object');
 console.log('PASS: AI privacy default, protected fields, existing paths, duplicate rejection, record isolation, confidence threshold, settings');
+
+assert.deepEqual(AI.requestOptions({endpoint:'https://api.deepseek.com/chat/completions',model:'deepseek-flash'}),{thinking:{type:'disabled'}});assert.deepEqual(AI.requestOptions({endpoint:'https://api.moonshot.cn/v1/chat/completions',model:'kimi-k2.6'}),{thinking:{type:'disabled'}});assert.deepEqual(AI.requestOptions({endpoint:'https://api.openai.com/v1/chat/completions',model:'gpt-4.1-mini'}),{});
+
+for(const [endpoint,expected]of [['https://api.openai.com','https://api.openai.com/v1/chat/completions'],['https://api.moonshot.cn/v1/','https://api.moonshot.cn/v1/chat/completions'],['https://api.deepseek.com','https://api.deepseek.com/chat/completions'],['https://proxy.example/v1','https://proxy.example/v1/chat/completions']])assert.equal(AI.settings({enabled:true,endpoint,model:'test'}).endpoint,expected);assert.throws(()=>AI.settings({enabled:true,endpoint:'https://api.openai.com/v1/responses',model:'test'}),/Chat Completions/);
+
+assert.equal(AI.settings({enabled:true,endpoint:'https://openrouter.ai/api/v1',model:'test'}).endpoint,'https://openrouter.ai/api/v1/chat/completions');

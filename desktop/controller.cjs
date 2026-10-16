@@ -9,7 +9,19 @@ class Controller{
  async stop(){this.webOCR.cancel();if(this.gateway){await this.gateway.close();this.gateway=null;}return this.status();}
  status(){return {running:!!this.gateway,port:this.config.port,engine:this.config.upstream.enabled?'upstream':'local-rules',directory:this.directory,connections:[...this.connections.values()].filter(c=>Date.now()-c.at<90000)};}
  model(){const {apiKey,...publicModel}=this.config.upstream;return {...publicModel,hasKey:!!apiKey};}
- async saveModel(input){const AI=require(path.join(this.runtime,'ai.js'));const normalized=input.enabled?AI.settings(input):{enabled:false,endpoint:this.config.upstream.endpoint,model:input.model||'',jsonMode:!!input.jsonMode};const config={...this.config,upstream:{...normalized,apiKey:input.clearKey?'':input.apiKey||this.config.upstream.apiKey||''}};const running=!!this.gateway;await this.stop();this.write(this.configFile,config);this.config=config;if(running)await this.start();return this.model();}
- async testModel(){const u=this.config.upstream;if(!u.enabled)throw Error('请先启用并保存模型');const r=await fetch(u.endpoint,{method:'POST',headers:{'Content-Type':'application/json',...(u.apiKey?{Authorization:'Bearer '+u.apiKey}:{})},body:JSON.stringify({model:u.model,messages:[{role:'user',content:'Reply OK'}],max_tokens:8,stream:false}),signal:AbortSignal.timeout(15000),redirect:'error'});if(!r.ok)throw Error('模型服务 HTTP '+r.status);await r.body.cancel();return {ok:true};}
+ async saveModel(input){const AI=require(path.join(this.runtime,'ai.js'));const normalized=input.enabled?AI.settings(input):{enabled:false,endpoint:this.config.upstream.endpoint,model:input.model||'',jsonMode:!!input.jsonMode};const config={...this.config,upstream:{...normalized,apiKey:input.clearKey?'':input.apiKey||(new URL(normalized.endpoint).origin===new URL(this.config.upstream.endpoint).origin?this.config.upstream.apiKey:'')||''}};const running=!!this.gateway;await this.stop();this.write(this.configFile,config);this.config=config;if(running)await this.start();return this.model();}
+ async testModel(){
+  if(!this.config.upstream.enabled)throw Error('请先启用并保存模型');
+  const AI=require(path.join(this.runtime,'ai.js')),{createGateway}=require(path.join(this.runtime,'local-server/server.cjs'));
+  const gateway=createGateway({...this.config,port:0,cacheTtlMs:0});const started=Date.now();
+  try{const address=await gateway.listen();const id='probe-'+crypto.randomBytes(8).toString('hex');const packet=AI.build([{id,label:'电子邮箱',section:'basics',type:'email'}],{'basics.email':'synthetic@example.invalid'},{shareValues:false});
+   const response=await fetch('http://127.0.0.1:'+address.port+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+this.config.token},body:JSON.stringify(AI.requestBody({model:'resumefill-local'},packet)),signal:AbortSignal.timeout(25000),redirect:'error'});
+   const data=await response.json();if(!response.ok){const code=String(data.error||'').match(/HTTP (\d{3})/)?.[1];throw Error(code?'模型调用失败，HTTP '+code:'模型响应无效、网络异常或超时');}
+   if(data.gateway?.engine!=='upstream'||data.gateway.cacheHit)throw Error('测试未经过真实模型');
+   const result=AI.parseResponse(data.choices?.[0]?.message?.content,packet);if(!result.accepted.some(m=>m.fieldId===id&&m.path==='basics.email'))throw Error('模型未通过字段匹配协议验证');
+   return {ok:true,latencyMs:Date.now()-started,route:'desktop → local gateway → model',checks:['authentication','response JSON','field matching'],syntheticOnly:true};
+  }catch(e){if(/^(模型|测试)/.test(e.message))throw e;throw Error('模型网络连接失败或超时');}finally{await gateway.close();}
+ }
+
 }
 module.exports={Controller};

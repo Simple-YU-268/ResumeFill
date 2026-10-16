@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path');
 const source=path.resolve(__dirname,'..'),dest=path.join(__dirname,'resources');fs.mkdirSync(dest,{recursive:true});for(const file of ['LICENSE','THIRD_PARTY_NOTICES.md'])fs.copyFileSync(path.join(source,file),path.join(dest,file));
+fs.writeFileSync(path.join(__dirname,'ui/regions.js'),'window.ResumeRegions='+fs.readFileSync(path.join(source,'data/regions.json'),'utf8')+';');
 fs.copyFileSync(path.join(source,'matcher.js'),path.join(__dirname,'ui/matcher.js'));
 const extension=path.join(dest,'extension');fs.mkdirSync(extension,{recursive:true});
 const files=['manifest.json','background.js','agent-bridge.js','desktop-bridge.js','web-ocr-bridge.js','web-ocr-match.js','profile.js','matcher.js','option-match.js','ai.js','answers.js','popup.html','popup.js','options.html','options.js','style.css','content.js','controls.js','adapters.js','layout.js','inline.js','sample.json','sample-adapters.json','LICENSE','THIRD_PARTY_NOTICES.md'];

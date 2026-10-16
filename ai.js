@@ -8,6 +8,9 @@
     const local=['127.0.0.1','localhost','[::1]'].includes(url.hostname);
     if(url.protocol!=='https:'&&!(url.protocol==='http:'&&local))throw Error('使用 HTTPS 地址，或本机 localhost/127.0.0.1 的 HTTP 服务');
     if(url.hostname==='[::1]')throw Error('本机服务请使用 localhost 或 127.0.0.1');
+    const cleanPath=url.pathname.replace(/\/+$/,'');
+    if(!cleanPath||/^\/(?:api\/)?v1$/.test(cleanPath))url.pathname=(cleanPath||(['api.openai.com','api.moonshot.cn','api.moonshot.ai'].includes(url.hostname)?'/v1':''))+'/chat/completions';
+    if(/\/(responses|messages)$/.test(cleanPath))throw Error('当前仅支持 Chat Completions 接口，请使用 /v1/chat/completions 地址');
     if(!String(data.model||'').trim()||String(data.model).length>150)throw Error('请填写服务提供方支持的模型 ID');
     return {enabled:true,endpoint:url.href,model:String(data.model).trim(),jsonMode:!!data.jsonMode,originPattern:url.protocol+'//'+url.hostname+'/*'};
   }
@@ -42,7 +45,11 @@
     }
     return {accepted,rejected,unmatched:packet.fields.filter(f=>!seen.has(f.id)).map(f=>f.id)};
   }
-  function requestBody(config,packet){return {model:config.model,messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify(packet)}],stream:false,...config.jsonMode?{response_format:{type:'json_object'}}:{}};}
-  root.ResumeAI={settings,build,validatePacket,parseResponse,requestBody,protectedField};
+  function requestOptions(config){
+    const host=config.endpoint?new URL(config.endpoint).hostname:'';
+    return ((host==='api.deepseek.com'&&['deepseek-flash','deepseek-v4-pro'].includes(config.model))||(['api.moonshot.cn','api.moonshot.ai'].includes(host)&&config.model==='kimi-k2.6'))?{thinking:{type:'disabled'}}:{};
+  }
+  function requestBody(config,packet){return {...requestOptions(config),model:config.model,messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify(packet)}],stream:false,...config.jsonMode?{response_format:{type:'json_object'}}:{}};}
+  root.ResumeAI={settings,build,validatePacket,parseResponse,requestBody,requestOptions,protectedField};
   if(typeof module!=='undefined')module.exports=root.ResumeAI;
 })(globalThis);

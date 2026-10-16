@@ -1,6 +1,6 @@
 # ResumeFill Agent
 
-本地优先的简历填表专用 Agent，包含 Windows 桌面管理端与 Chrome / Edge 扩展。当前版本 **0.12.0**，MIT 开源。
+本地优先的简历填表专用 Agent，包含 Windows 桌面管理端与 Chrome / Edge 扩展。当前版本 **0.13.0**，MIT 开源。
 
 ## 使用
 
@@ -48,3 +48,15 @@ npm run build
 浏览器测试默认使用已安装的 Edge；可设置 BROWSER_CHANNEL=chromium 并先运行 npx playwright install chromium，或通过 BROWSER_EXECUTABLE 指定浏览器。运行 npm run test:browser；桌面 UI 与 PDF 集成测试分别为 node desktop/ui-test.cjs 和 node desktop/pdf-test.cjs。
 
 构建输出位于 dist/，不进入 Git。测试只使用合成资料与临时浏览器目录。公开前运行 npm run privacy；构建后运行 npm run privacy:artifacts。参见 [隐私检查](PRIVACY-REVIEW.md)、[版本记录](CHANGELOG.md) 和 [第三方许可](THIRD_PARTY_NOTICES.md)。
+
+### 内置模型模板与调用验证
+
+桌面端和扩展设置内置 DeepSeek（deepseek-flash）、Kimi 国内接口（kimi-k2.6）、OpenAI（gpt-4.1-mini）、OpenRouter（qwen/qwen3.8-flash）模板，模型 ID 可修改。使用各平台正式 API 密钥。DeepSeek / Kimi K2.6 的字段、选项与 PDF 请求默认关闭思考模式，减少等待；OpenAI 不发送该专有参数。桌面端跨服务商域名保存时清除旧密钥。
+
+桌面端“测试已保存配置”通过临时鉴权本地网关访问真实配置的上游，不使用缓存或规则回退。只发送虚构字段与候选 JSON 路径，检查 Chat Completions 响应及有效字段匹配，显示耗时；HTTP 200、空匹配或错误 JSON 均不能冒充验证成功。
+
+2026-10-16：三个官方端点均已实际 POST 并返回 HTTP 401（未携带密钥），证明接口网络可达；当前开发环境未配置有效密钥，真实鉴权和推理尚未验证。模拟上游、鉴权失败、错误响应、空匹配及实际 Electron 模板 UI 测试通过。官方文档：[DeepSeek](https://api-docs.deepseek.com/)、[Kimi](https://platform.kimi.com/docs/get-api-key)、[OpenAI](https://developers.openai.com/api/docs/models/gpt-4.1-mini)。
+
+2026-10-16 OpenRouter 真实调用验证：Key 鉴权 HTTP 200；使用 `https://openrouter.ai/api/v1/chat/completions` 与 `qwen/qwen3.8-flash`，桌面控制器 → 鉴权本地网关 → 真实模型字段匹配通过（8307 ms），PDF 语义解析与结构校验通过（12517 ms）。只使用合成候选资料，密钥未写入配置或项目文件。`openai/gpt-4.1-mini` 返回 HTTP 403，服务提示 provider Terms Of Service 限制；该响应不能证明具体限制原因。此测试不证明其他模型或提供商均可用。
+
+0.13.0 资料编辑：现居地区、户籍、籍贯及经历 / 补充信息中的地区字段使用本地省市区县三级联动，保存完整路径和区县代码；切换上级会清空下级。详细街道地址保留文字。日期使用原生日历 / 月份控件，可选年份精度，结束日期支持至今，导入资料不会自动补齐缺失精度。地区词典为 2023-06-30 数据，未收录地区与旧原文保留，需人工核对。
