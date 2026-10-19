@@ -17,15 +17,15 @@
   if(run.cancelled)throw Error('Agent 已停止');await checkPage(run);if(!['fill_fields','verify_fields','observe_page','match_fields'].includes(call.name))throw Error('Agent 请求了未允许的工具');
   if(call.name==='observe_page')return {observation:await observe(run)};
   if(call.name==='match_fields'){
-   const fields=run.snapshot.fields.filter(f=>call.arguments.fieldIds.includes(f.id));if(!fields.length)return {matches:[]};const packet=ResumeAI.build(fields,run.values,{shareValues:false,page:run.snapshot.url});
-   const requestId=crypto.randomUUID();run.modelRequestId=requestId;try{const r=await matchAI({type:'RF_AI_MATCH',requestId,packet});return {matches:r.accepted.map(m=>({fieldId:m.fieldId,path:m.path,confidence:m.confidence,reason:m.reason}))};}finally{run.modelRequestId=null;}
+   const fields=run.snapshot.fields.filter(f=>call.arguments.fieldIds.includes(f.id)&&!run.approved.has(f.stableId));if(!fields.length)return {matches:[]};const packet=ResumeAI.build(fields,run.values,{shareValues:false,page:run.snapshot.url});
+   if(!packet.fields.length)return {matches:[]};const requestId=crypto.randomUUID();run.modelRequestId=requestId;try{const r=await matchAI({type:'RF_AI_MATCH',requestId,packet});return {matches:r.accepted.map(m=>({fieldId:m.fieldId,path:m.path,confidence:m.confidence,reason:m.reason}))};}finally{run.modelRequestId=null;}
   }
   const {resume,optionMappings={}}=await chrome.storage.local.get(['resume','optionMappings']),current=ResumeMatcher.flatten(resume),items=[];
   if(!Array.isArray(call.arguments.items)||call.arguments.items.length>200)throw Error('工具参数无效');
   for(const item of call.arguments.items){const f=run.snapshot.fields.find(f=>f.id===item.id),allowed=f&&run.approved.get(f.stableId);if(!allowed||allowed.path!==item.path||allowed.signature!==signature(f)||!Object.hasOwn(run.values,item.path)||current[item.path]!==run.values[item.path])throw Error('工具超出授权或简历资料已变化');
    const ruleKey='matching-v2::'+run.snapshot.origin+run.snapshot.page+'::'+(new URL(run.snapshot.url).searchParams.get('formId')||'')+'::'+run.snapshot.fingerprint+'::'+(run.snapshot.adapter||'generic');
    const mappingKey=ruleKey+'::'+JSON.stringify([f.label,f.section,f.recordIndex,f.type,f.path])+'::'+item.path+'::'+run.values[item.path];
-   items.push({id:item.id,value:optionMappings[mappingKey]||run.values[item.path]});
+   items.push({id:item.id,path:item.path,value:optionMappings[mappingKey]||run.values[item.path]});
   }
   const result=await send(run,{type:call.name==='fill_fields'?'RF_FILL':'RF_VERIFY',items,overwrite:false,saveCards:false});const results=Array.isArray(result)?result:result.results;
   return {results:results.map(r=>({id:r.id,status:r.status,error:r.status==='verified'?'':'未通过本地控件检查'}))};

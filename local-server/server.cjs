@@ -5,7 +5,7 @@ const VERSION='0.2.0';
 function createGateway(config,{fetchImpl=fetch}={}){
  if(typeof config.token!=='string'||config.token.length<32)throw Error('本地访问令牌至少 32 字符，请先运行 setup.cjs');
  const port=config.port??17321;if(!Number.isInteger(port)||port<0||port>65535)throw Error('端口无效');
- let upstream=null;if(config.upstream?.enabled){upstream=AI.settings({...config.upstream,enabled:true});}
+ let upstream=null;if(config.upstream?.enabled){upstream=AI.settings({...config.upstream,enabled:true});config={...config,upstream:{...config.upstream,apiKey:AI.normalizeKey(config.upstream.apiKey)}};}
  const agent=new AgentEngine({modelEnabled:!!upstream});
  const allowed=config.allowedExtensionIds||[];if(!Array.isArray(allowed)||allowed.some(id=>!/^[a-p]{32}$/.test(id)))throw Error('扩展 ID 白名单无效');
  const cache=new Map(),ttl=config.cacheTtlMs??300000,maxCache=config.maxCacheEntries??128,timeout=config.timeoutMs??20000;let active=0;
@@ -20,7 +20,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
   for(let attempt=0;attempt<2;attempt++){
    const r=await fetchImpl(upstream.endpoint,{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'ResumeFillAgent/0.8.0',...(config.upstream.apiKey?{Authorization:'Bearer '+config.upstream.apiKey}:{})},body:JSON.stringify(modelBody),signal,redirect:'error',credentials:'omit'});
    if([429,502,503,504].includes(r.status)&&attempt===0){await r.body?.cancel();await new Promise((resolve,reject)=>{const done=()=>{clearTimeout(timer);signal.removeEventListener('abort',abort);};const abort=()=>{done();reject(Error('请求已取消'));};const timer=setTimeout(()=>{done();resolve();},150);signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();});continue;}
-   if(!r.ok){await r.body?.cancel();throw Object.assign(Error('上游模型请求失败，HTTP '+r.status),{status:502});}
+   if(!r.ok){await r.body?.cancel();throw Object.assign(Error('上游模型请求失败，'+AI.httpError(r.status,upstream.endpoint)),{status:502});}
    const reader=r.body.getReader();let raw='',size=0;const decoder=new TextDecoder();for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>300000){await reader.cancel();throw Error('上游响应过大');}raw+=decoder.decode(value,{stream:true});}raw+=decoder.decode();let outer;try{outer=JSON.parse(raw);}catch{throw Error('上游响应不是兼容 JSON');}const text=outer.choices?.[0]?.message?.content;if(typeof text!=='string')throw Error('上游缺少 message.content');
    if(kind==='options')return Options.parse(text,packet);const result=AI.parseResponse(text,packet);return {matches:result.accepted.map(m=>({fieldId:m.fieldId,path:m.path,confidence:m.confidence,reason:m.reason}))};
   }

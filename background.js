@@ -9,14 +9,14 @@ async function matchAI(message){
   const values=ResumeMatcher.flatten(resume||{});
   const optionMode=message.type==='RF_AI_OPTION';
   const packet=optionMode?ResumeOptionMatch.validate(message.packet,values):message.type==='RF_AI_TEST'?{version:1,shareValues:false,fields:[{id:'test-email-'+crypto.randomUUID(),label:'联系电子信箱',section:'basics',recordIndex:null,type:'input',options:[]}],candidates:[{path:'basics.email'}]}:ResumeAI.validatePacket(message.packet,values);
-  const {aiApiKey}=await chrome.storage.session.get('aiApiKey');
+  const savedKey=await chrome.storage.session.get('aiApiKey');const aiApiKey=ResumeAI.normalizeKey(savedKey.aiApiKey);if(new URL(config.endpoint).hostname==='openrouter.ai'&&!aiApiKey)throw Error('尚未保存 OpenRouter 会话密钥，或浏览器重启后密钥已清除；请在设置中重新保存');
   const controller=new AbortController(),requestId=message.requestId;
   if(typeof requestId!=='string'||requestId.length>100)throw Error('请求 ID 无效');
   requests.get(requestId)?.abort();requests.set(requestId,controller);
   const timer=setTimeout(()=>controller.abort(),25000);
   try{
     const response=await fetch(config.endpoint,{method:'POST',headers:{'Content-Type':'application/json',...aiApiKey?{Authorization:'Bearer '+aiApiKey}:{}},body:JSON.stringify(optionMode?{...ResumeAI.requestOptions(config),model:config.model,messages:[{role:'system',content:ResumeOptionMatch.system},{role:'user',content:JSON.stringify(packet)}],stream:false,...config.jsonMode?{response_format:{type:'json_object'}}:{}}:ResumeAI.requestBody(config,packet)),signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store'});
-    if(!response.ok)throw Error('AI 服务返回 HTTP '+response.status+'，请检查地址、模型、密钥及额度');
+    if(!response.ok)throw Error('AI 服务返回 '+ResumeAI.httpError(response.status,config.endpoint));
     const length=Number(response.headers.get('content-length')||0);if(length>300000)throw Error('AI 响应超过大小限制');
     const reader=response.body.getReader(),decoder=new TextDecoder();let raw='',bytes=0;
     for(;;){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>300000){controller.abort();throw Error('AI 响应超过大小限制');}raw+=decoder.decode(value,{stream:true});}

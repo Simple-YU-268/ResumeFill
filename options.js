@@ -20,7 +20,7 @@ $('saveAI').onclick=()=>safe(async()=>{
   const {aiSettings:previous}=await chrome.storage.local.get('aiSettings');
   if(config.enabled&&(!previous?.endpoint||new URL(previous.endpoint).origin!==new URL(config.endpoint).origin))await chrome.storage.session.remove('aiApiKey');
   await chrome.storage.local.set({aiSettings:config});
-  if($('aiKey').value){await chrome.storage.session.set({aiApiKey:$('aiKey').value});$('aiKey').value='';}
+  if($('aiKey').value){await chrome.storage.session.set({aiApiKey:ResumeAI.normalizeKey($('aiKey').value)});$('aiKey').value='';}
   status(config.enabled?'AI 已启用；默认只发送字段描述与 JSON 路径。':'AI 已关闭');
 });
 $('clearKey').onclick=()=>safe(async()=>{await chrome.storage.session.remove('aiApiKey');$('aiKey').value='';status('会话密钥已清除');});

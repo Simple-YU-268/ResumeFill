@@ -15,7 +15,7 @@
   async function show(el){
     if(writing)return;
     if(!eligible(el)||!ResumeLayout.visible(el)||el.disabled||el.readOnly){hide();return;}
-    const field=ResumeFillPage.describe(el);if(ResumeAnswers.protectedField(field)){hide();return;}
+    const field=ResumeFillPage.describe(el);if(field.scopeExcluded||ResumeAnswers.protectedField(field)){hide();return;}
     active=el;const rev=++version;
     try{resume=(await request('RF_ASSIST_DATA')).resume;}catch{hide();return;}
     if(rev!==version||active!==el)return;

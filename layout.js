@@ -13,7 +13,7 @@
     const nodes=[],walker=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT);let node;
     while((node=walker.nextNode())){
       const parent=node.parentElement;
-      if(!parent||parent.closest('script,style,noscript,option,textarea,button,[role="option"]')||!visible(parent))continue;
+      if(!parent||parent.closest('script,style,noscript,option,textarea,button,[role="option"],.help,.hint,.description,.explanation,[role="note"]')||!visible(parent))continue;
       const text=node.textContent.replace(/\s+/g,' ').trim().replace(/^[*＊\s]+|[*＊：:\s]+$/g,'');
       if(!text||text.length>60)continue;
       const range=doc.createRange();range.selectNodeContents(node);const rect=range.getBoundingClientRect();
@@ -22,22 +22,24 @@
   }
   function infer(el,nodes,controls){
     const box=el.getBoundingClientRect();
-    const candidates=nodes.filter(n=>!el.contains(n.parent)).map(n=>({...n,score:distance(box,n.rect)})).filter(n=>Number.isFinite(n.score)&&!controls.some(other=>other!==el&&distance(other.getBoundingClientRect(),n.rect)<n.score)).sort((a,b)=>a.score-b.score);
+    const cell=el.closest('td,th'),definition=el.closest('dd');
+    const candidates=nodes.filter(n=>!el.contains(n.parent)&&(!cell||!n.parent.closest('td,th')||n.parent.closest('td,th')===cell)&&(!definition||!n.parent.closest('dt')||definition.previousElementSibling===n.parent.closest('dt'))).map(n=>({...n,score:distance(box,n.rect)})).filter(n=>Number.isFinite(n.score)&&!controls.some(other=>other!==el&&distance(other.getBoundingClientRect(),n.rect)<n.score)).sort((a,b)=>a.score-b.score);
     const first=candidates[0],ambiguous=candidates[1]&&candidates[1].text!==first.text&&candidates[1].score-first.score<12;
     const heading=nodes.filter(n=>/^(教育经历|教育背景|工作经历|实习经历|项目经历|基本信息|个人信息|education|work experience|projects)$/i.test(n.text)&&n.rect.bottom<=box.top&&box.top-n.rect.bottom<1000).sort((a,b)=>b.rect.bottom-a.rect.bottom)[0];
     return {label:first&&!ambiguous?first.text:'',context:heading?.text||'',evidence:first&&!ambiguous?'可见文字与控件位置':''};
   }
   function associate(el){
     const clean=n=>(n?.innerText||n?.textContent||'').replace(/\s+/g,' ').replace(/[*＊:：]|必填|选填/g,'').trim();
+    const labelText=node=>{const copy=node.cloneNode(true);const originals=[...node.querySelectorAll('*')],clones=[...copy.querySelectorAll('*')];originals.forEach((n,i)=>{if(!visible(n)||n.matches('small,.help,.hint,.description,.explanation,[role="note"],script,style,input,select,textarea,button'))clones[i].remove();});return clean(copy);};
     const cell=el.closest('td,th');let tableLabel='',annotation='';
-    if(cell){for(let prev=cell.previousElementSibling;prev;prev=prev.previousElementSibling){const value=clean(prev);if(value&&value.length<=80&&!prev.querySelector('input,textarea,select,[contenteditable=true]')){if(/^[（(]/.test(value)){annotation||=value;continue;}tableLabel=value;break;}}tableLabel||=annotation;}
-    const definition=el.closest('dd');const term=definition?.previousElementSibling;const definitionLabel=term?.matches('dt')&&visible(term)?clean(term):'';
+    if(cell){for(let prev=cell.previousElementSibling;prev;prev=prev.previousElementSibling){if(!prev.matches('th,td')||prev.querySelector('input,textarea,select,[contenteditable=true],[role="combobox"]'))break;if(!visible(prev))continue;const value=labelText(prev);if(!value)continue;if(/^[（(]/.test(value)){annotation||=value;continue;}if(value.length<=80)tableLabel=value;break;}tableLabel||=annotation;}
+    const definition=el.closest('dd');const term=definition?.previousElementSibling;const definitionLabel=term?.matches('dt')&&visible(term)?labelText(term):'';
     const container=el.closest('.el-form-item,.ant-form-item,.form-item,.form-row,.layui-form-item,[data-field-label]');
     const labels=container?Array.from(container.querySelectorAll('label,.field-label,.layui-form-label')).filter(n=>visible(n)&&!n.querySelector('input,select,textarea')).map(clean).filter(Boolean):[];
     const radioGroup=el.type==='radio'?el.closest('[role="radiogroup"],fieldset'):el.matches('[role="radiogroup"]')?el:null;
     const groupIds=(radioGroup?.getAttribute('aria-labelledby')||'').split(/\s+/).filter(Boolean).map(id=>el.ownerDocument.getElementById(id)).filter(n=>n&&visible(n));
     const groupLabel=radioGroup?(radioGroup.getAttribute('aria-label')||groupIds.map(clean).join(' ')||clean(radioGroup.querySelector(':scope > legend'))):'';
-    const label=groupLabel||el.getAttribute('data-label')||container?.getAttribute('data-field-label')||labels[0]||tableLabel||definitionLabel;
+    const label=groupLabel||el.getAttribute('data-label')||container?.getAttribute('data-field-label')||(labels.length===1?labels[0]:'')||tableLabel||definitionLabel;
     const roleText=label||clean(el.closest('fieldset')?.querySelector('legend'));
     const regionRole=/户籍|户口/.test(roleText)?'hukou':/籍贯/.test(roleText)?'native':/现居|居住地|居住地址/.test(roleText)?'current':null;
     const technical=(el.name||'')+' '+(el.id||'');

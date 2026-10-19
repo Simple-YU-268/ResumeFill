@@ -2,7 +2,21 @@
   if(globalThis.__resumeFillV2)return;
   globalThis.__resumeFillV2=true;
   const C=ResumeControls,A=ResumeAdapters;
-  let registry=new Map(),activeAdapter=null,revision=0,busy=false,scannedUrl='',operationController=null;
+  let registry=new Map(),activeAdapter=null,revision=0,busy=false,scannedUrl='',operationController=null,pendingOperation=null;
+  let selectedScope=null,scopeChoices=new Map(),scopeChoiceUrl='',scopeGeneration=0;
+  const recordSelector='[data-resume-record],.experience-card,.project-card,.project-item,.education-card,.work-card,.experience-item';
+  function scopeList(){
+    scopeChoices=new Map();scopeChoiceUrl=location.href;scopeGeneration++;
+    const roots=new Set();for(const el of shown(document,'input,textarea,select,[role="combobox"]')){if(!eligible(el))continue;for(let p=el.parentElement;p&&p!==document.body;p=p.parentElement)if(p.matches('section,fieldset,article,div,table,dl,form,main'))roots.add(p);}
+    const result=[];for(const root of roots){if(result.length>=200)break;const controls=shown(root,'input,textarea,select,[role="combobox"]').filter(eligible);if(!controls.length)continue;const id=`scope-${scopeGeneration}-${result.length}`;scopeChoices.set(id,root);const heading=text(root.querySelector('legend,h2,h3,h4'))||root.getAttribute('aria-label')||text(root.querySelector('label,th,dt'))||root.tagName.toLowerCase();result.push({id,label:heading.slice(0,70),count:controls.length,tag:root.tagName.toLowerCase()});}return result;
+  }
+  function chooseScope(message){
+    if(message.clear){selectedScope=null;registry.clear();return {cleared:true};}
+    const root=scopeChoices.get(message.id);if(scopeChoiceUrl!==location.href||!root?.isConnected||!ResumeLayout.visible(root))throw Error('区块已失效，请重新列出区块');
+    if(message.highlight){root.scrollIntoView({block:'center'});root.animate([{outline:'4px solid #0d8b68'},{outline:'4px solid transparent'}],{duration:2500});return {highlighted:true};}
+    if(!['education','projects','work','basics'].includes(message.section)||!Number.isInteger(message.recordIndex)||message.recordIndex<0||message.recordIndex>29)throw Error('请选择资料类目和经历序号');
+    selectedScope={root,key:message.section,index:message.section==='basics'?null:message.recordIndex,url:location.href};registry.clear();return {selected:true};
+  }
   let mutations=0;new MutationObserver(()=>mutations++).observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});
   const ocrLabels=new WeakMap();const viewport=()=>({url:location.href,width:innerWidth,height:innerHeight,scrollX,scrollY,scale:visualViewport?.scale||1,offsetX:visualViewport?.offsetLeft||0,offsetY:visualViewport?.offsetTop||0,mutations});
   function ocrContext(){return {viewport:viewport(),fields:Array.from(registry.values()).map(d=>({...d.field,position:(()=>{const r=d.el.getBoundingClientRect();return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)};})()})).filter(f=>f.position.x>=0&&f.position.y>=0&&f.position.x+f.position.width<=innerWidth&&f.position.y+f.position.height<=innerHeight).map(f=>({id:f.id,stableId:f.stableId,label:f.label,ocrEligible:f.ocrEligible,position:f.position}))};}
@@ -13,6 +27,11 @@
   const text=el=>{if(!el)return '';let raw;if(el.matches?.('label')){const copy=el.cloneNode(true);copy.querySelectorAll('input,select,textarea,[role="combobox"],button').forEach(n=>n.remove());raw=copy.textContent;}else raw=el.innerText||el.textContent||'';return raw.replace(/[*＊:：]|必填|选填/g,'').trim();};
   const kind=el=>el.isContentEditable?'contenteditable':el.tagName==='SELECT'?'select':el.type==='radio'||el.matches('[role="radiogroup"]')?'radio':el.matches('[role="combobox"],.el-select,.ant-select')?'combobox':['date','month','datetime-local'].includes(el.type)?'date':'input';
   function scopes(adapter){
+    if(selectedScope){const {root,key,index,url}=selectedScope;if(!root.isConnected||url!==location.href||!ResumeLayout.visible(root))throw Error('已选区块失效，请重新选择或清除范围');
+      let cards=shown(root,recordSelector).filter(n=>!n.parentElement.closest(recordSelector)||!root.contains(n.parentElement.closest(recordSelector)));
+      if(!cards.length)cards=Array.from(root.children).filter(n=>n.matches('section,fieldset')&&n.querySelector('input,textarea,select'));
+      if(cards.length>1){const outside=shown(root,'input,textarea,select,[role="combobox"]').filter(eligible).some(el=>!cards.some(c=>c.contains(el)));if(outside)throw Error('区块含经历卡片外字段，请选择更小的容器');return cards.map((scope,i)=>({root,scope,key,index:index===null?null:index+i,config:{}}));}
+      return [{root,scope:root,key,index,config:{}}];}
     if(adapter){const out=[];for(const config of adapter.sections){const roots=shown(document,config.selector);if(roots.length!==1){out.push({config,key:config.key,error:'模块选择器未唯一命中'});continue;}const root=roots[0],cards=config.cardSelector?query(root,config.cardSelector):[root];cards.forEach((scope,index)=>out.push({config,key:config.key,root,scope,index:config.cardSelector?index:null}));if(!cards.length)out.push({config,key:config.key,root,error:'没有经历卡片，请先补齐经历'});}return out;}
     return [{scope:document,root:document,key:null,index:null,config:{}}];
   }
@@ -21,24 +40,59 @@
     const cardSelector='[data-resume-record],.experience-card,.project-card,.project-item,.education-card,.work-card,.experience-item';
     let group=null,context='',section=null;
     for(let node=el.parentElement;node&&node!==document.body;node=node.parentElement){
-      const title=text(node.querySelector(':scope > legend,:scope > h2,:scope > h3,:scope > h4,:scope > header > h2'));
+      const title=moduleTitle(node);
       if(node.matches(cardSelector)&&!node.hasAttribute('data-resume-section'))continue;
       const detected=node.getAttribute('data-resume-section')||(/教育|学历|education/i.test(title)?'education':/工作经历|实习经历|work experience|^(工作|实习|work|employment)$/i.test(title)?'work':/项目经历|项目经验|科研经历|project experience|projects/i.test(title)?'projects':null);
+      if(/校内活动|校园经历|社团经历|学生工作/.test(title))return {section:null,recordIndex:null,context:title,contextBlocked:true};
       if(detected){group=node;context=title;section=detected;break;}
     }
     let card=el.closest(cardSelector);
     let peers=card&&group?query(group,cardSelector).filter(n=>{for(let p=n.parentElement;p&&p!==group;p=p.parentElement)if(p.matches(cardSelector))return false;return true;}):[];
     if(!card&&group){const structural=Array.from(group.children).filter(n=>n.matches('section,fieldset')&&n.querySelector('input,textarea,select'));if(structural.length){const owner=structural.find(n=>n.contains(el));if(owner){card=owner;peers=structural;}}}
-    return {section,recordIndex:card&&peers.includes(card)?peers.indexOf(card):null,context};
+    if(!card&&group){
+      // Repeated plain DIV cards: require multiple controls and identical field structure,
+      // so individual form rows and two date inputs cannot become separate records.
+      for(let node=el.parentElement;node&&node!==group;node=node.parentElement){
+        const signature=n=>{const inputs=shown(n,'input,textarea,select').filter(eligible);return inputs.length>=3?inputs.map(c=>c.tagName+':'+(c.type||'')+':'+text(c.labels?.[0])).join('|'):'';};
+        const sig=signature(node);if(!sig)continue;
+        const siblings=Array.from(node.parentElement.children).filter(n=>signature(n)===sig);
+        if(siblings.length>1){card=node;peers=siblings;}
+      }
+    }
+    return {section,recordIndex:card&&peers.includes(card)?peers.indexOf(card):group?0:null,context};
+  }
+  function moduleTitle(node){
+    const heading=node.querySelector(':scope > legend,:scope > h2,:scope > h3,:scope > h4,:scope > header > h2');
+    if(heading)return text(heading);
+    // A module title precedes its controls; a field label must never act as a heading.
+    for(const child of node.children){
+      if(child.matches('input,textarea,select')||child.querySelector('input,textarea,select'))break;
+      if(child.matches('label,button')||!ResumeLayout.visible(child))continue;
+      const title=text(child);
+      if(/^(教育经历|教育背景|工作经历|实习经历|项目经历|项目经验|科研经历|校内活动|校园经历|社团经历|学生工作)(?:\s|$)/.test(title)&&title.length<80)return title;
+    }
+    return '';
+  }
+  function dateRangeLabel(el){
+    for(let node=el.parentElement,depth=0;node&&depth<4;node=node.parentElement,depth++){
+      const inputs=shown(node,'input,textarea,select').filter(eligible);
+      if(inputs.length>2)break;
+      if(inputs.length!==2||!inputs.every(e=>e.tagName==='INPUT'))continue;
+      const labels=shown(node,'label,.field-label,.el-form-item__label,.ant-form-item-label').map(text);
+      const raw=labels.join(' ')||Array.from(node.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
+      if(!/在职时间|起止时间|时间段|实习时间|项目时间|就读时间/.test(raw))continue;
+      return inputs.indexOf(el)===0?'开始日期':'结束日期';
+    }
+    return '';
   }
   function descriptor(el,scope,config={}){
-    const type=config.type||kind(el),radios=type==='radio'?(el.type==='radio'?query(el.form||scope,'input[type="radio"]').filter(r=>r.name===el.name&&r.name&&eligible(r)):shown(el,'input[type="radio"]')):null;
+    const type=config.type||kind(el),radios=type==='radio'?(el.type==='radio'?query(scope,'input[type="radio"]').filter(r=>r.name===el.name&&r.name&&eligible(r)):shown(el,'input[type="radio"]')):null;
     return {el,scope,type,config,radios:radios?.length?radios:[el]};
   }
   function scan(data,counts={}){
     if(data){A.validate(data);activeAdapter=A.choose(data,location.href);}
     revision++;registry=new Map();scannedUrl=location.href;const fields=[],sectionIssues=[];
-    const visibleText=ResumeLayout.collect(document);
+    const visibleText=ResumeLayout.collect(document).filter(n=>!selectedScope||selectedScope.root.contains(n.parent));
     for(const s of scopes(activeAdapter)){
       if(s.error){sectionIssues.push({section:s.key,error:s.error});continue;}
       const candidates=shown(s.scope,'[role="radiogroup"],[role="combobox"],.el-select,.ant-select,input,textarea,select,[contenteditable="true"]');
@@ -47,6 +101,7 @@
         const configuredControl=(['combobox','cascader','radio'].includes(config.type)||config.datePanel)&&!el.disabled&&ResumeLayout.visible(el);
         if(used.has(el)||!eligible(el)&&!configuredControl)return;
         const d=descriptor(el,s.scope,config);
+        if(selectedScope)d.scopeGuard=()=>selectedScope?.root.isConnected&&selectedScope.url===location.href&&selectedScope.root.contains(el)&&s.scope.contains(el);
         if(d.type==='radio'&&d.radios.some(r=>used.has(r)))return;
         used.add(el);if(d.type==='radio')d.radios.forEach(r=>used.add(r));
         for(const child of query(el,'input,select,textarea,[role="combobox"],[contenteditable="true"]'))used.add(child);
@@ -65,6 +120,7 @@
         const path=config.path?A.recordPath(config.path,s.index??0):null;
         const field={id,label,tokens:tokens.length?tokens:[linked,el.getAttribute('aria-label'),el.placeholder,el.name,el.id,el.autocomplete].filter(Boolean),...ctx,type:d.type,path,value:C.read(d),required:!!el.required||el.getAttribute('aria-required')==='true',evidence:config.path?'站点配置':labels.length||containerLabels.length?'可见关联标签':inferred.evidence||'控件属性',options:el.tagName==='SELECT'?Array.from(el.options).map(o=>o.textContent):null};
         if(!field.context)field.context=structural.context||inferred.context||'';
+        const rangeLabel=dateRangeLabel(el);if(rangeLabel&&!config.path&&!config.label){field.label=rangeLabel;field.tokens=[rangeLabel];field.evidence='同一时间段的起止控件';}
         field.regionRole=structural.regionRole;field.regionLevel=structural.regionLevel;
         field.datePart=structural.datePart;field.datePath=structural.datePath;if(field.datePart)field.label='出生日期 · '+({year:'年',month:'月',day:'日'}[field.datePart]);
         if(structural.label&&!config.label&&!labels.length)field.evidence=structural.evidence;
@@ -72,16 +128,16 @@
         field.ocrEligible=!config.label&&!config.path&&!labels.length&&!linked&&!el.getAttribute('aria-label')&&!structural.label&&!containerLabels.length&&!inferred.label&&!field.datePart;
         const approved=ocrLabels.get(el);if(field.ocrEligible&&approved&&JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)})){field.label=approved.label;field.tokens=[approved.label];field.evidence='本地 OCR（已人工确认）';d.ocrGuard=()=>{const r=el.getBoundingClientRect();return JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)});};}
         field.stableId=stableIds.get(el);field.position={x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)};
-        const previous=lastDescriptors.get(el);if(previous&&previous.type===d.type&&['label','section','recordIndex','context','path','regionRole','regionLevel','datePart','datePath'].every(key=>previous.field[key]===field[key])){d.optionConfirmed=previous.optionConfirmed;d.selectedPath=previous.selectedPath;}
+        const previous=lastDescriptors.get(el);if(previous&&previous.type===d.type&&['label','section','recordIndex','context','path','regionRole','regionLevel','datePart','datePath'].every(key=>previous.field[key]===field[key])){d.optionConfirmed=previous.optionConfirmed;d.selectedPath=previous.selectedPath;d.numericSelection=previous.numericSelection;d.sourcePath=previous.sourcePath;}
         const entry={...d,scanUrl:location.href,field,sectionScope:s};lastDescriptors.set(el,entry);registry.set(id,entry);fields.push(field);
       };
       for(const config of s.config.fields||[]){const elements=shown(s.scope,config.selector);if(elements.length!==1){sectionIssues.push({section:s.key,recordIndex:s.index,error:`字段选择器未唯一命中：${config.label||config.path}`});continue;}add(elements[0],config);}
       candidates.forEach(el=>{if(!el.parentElement?.closest('[role="combobox"],.el-select,.ant-select,[contenteditable="true"]'))add(el);});
     }
-    const coverage=(activeAdapter?.sections||[]).filter(s=>s.cardSelector).map(s=>{const roots=shown(document,s.selector),present=roots.length===1?query(roots[0],s.cardSelector).length:0;return {section:s.key,expected:counts[s.key]??null,present,missing:Math.max(0,(counts[s.key]||0)-present)};});
+    const coverage=(selectedScope?[]:activeAdapter?.sections||[]).filter(s=>s.cardSelector).map(s=>{const roots=shown(document,s.selector),present=roots.length===1?query(roots[0],s.cardSelector).length:0;return {section:s.key,expected:counts[s.key]??null,present,missing:Math.max(0,(counts[s.key]||0)-present)};});
     const groups=new Map();for(const field of fields){const key=JSON.stringify([field.label,field.context,field.section,field.recordIndex,field.type]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(field);}
     for(const group of groups.values())if(group.length>1)for(const field of group){field.ambiguousLabel=true;field.matchWarning='同组同名字段，需人工选择；不自动复用答案';}
-    return {fields,sectionIssues,coverage,adapter:activeAdapter?.id||null,url:location.href,origin:location.origin,page:location.pathname,fingerprint:A.fingerprint(fields)};
+    return {fields,sectionIssues,coverage,selectedScope:selectedScope?{section:selectedScope.key,recordIndex:selectedScope.index}:null,adapter:selectedScope?null:activeAdapter?.id||null,url:location.href,origin:location.origin,page:location.pathname,fingerprint:A.fingerprint(fields)};
   }
   async function clickAction(scope,selector){
     const nodes=shown(scope,selector).filter(el=>!el.disabled&&el.getAttribute('aria-disabled')!=='true');
@@ -90,6 +146,7 @@
     button.click();
   }
   async function prepare(counts){
+    if(selectedScope)throw Error('区块模式不自动新增或保存经历，请先清除范围');
     if(!activeAdapter)throw Error('补齐经历需要先扫描并命中站点适配');
     const results=[];
     for(const config of activeAdapter.sections.filter(s=>s.key!=='basics'&&s.cardSelector)){
@@ -109,7 +166,8 @@
     operationController=new AbortController();
     const results=[],touched=new Map();
     for(const item of message.items){const d=registry.get(item.id);if(!d){results.push({id:item.id,status:'stale',error:'扫描已失效'});continue;}
-      d.signal=operationController.signal;if(d.signal.aborted){results.push({id:item.id,status:'failed',error:'操作已取消'});continue;}
+      if(selectedScope&&(!item.path||!ResumeMatcher.allowedPath(d.field,item.path))){results.push({id:item.id,status:'failed',error:'资料路径不属于所选经历'});continue;}
+      d.sourcePath=item.path;d.manualOption=item.manualOption===true;d.signal=operationController.signal;if(d.signal.aborted){results.push({id:item.id,status:'failed',error:'操作已取消'});continue;}
       try{const r=item.verifyOnly?await C.verify(d,item.value):await C.fill(d,item.value,message.overwrite);results.push({id:item.id,...r});if(r.status==='filled'||r.status==='verified'){const key=d.sectionScope.scope;touched.set(key,d.sectionScope);}}catch(e){let candidates=[];try{candidates=C.candidates(d);}catch{}results.push({id:item.id,status:'failed',error:e.message,candidates});}
     }
     await new Promise(resolve=>setTimeout(resolve,350));
@@ -126,6 +184,7 @@
   }
   globalThis.ResumeFillPage={
     describe(el){
+      if(selectedScope)return {label:'区块模式请使用插件预览',ambiguousLabel:true,scopeExcluded:true};
       const existing=Array.from(registry.values()).find(d=>d.el===el);if(existing)return existing.field;
       const visibleText=ResumeLayout.collect(document),near=ResumeLayout.infer(el,visibleText,shown(document,'input,textarea,select'));
       const direct=Array.from(el.labels||[]).filter(ResumeLayout.visible).map(text)[0]||el.getAttribute('aria-label');
@@ -133,14 +192,16 @@
       const adapterScope=scopes(activeAdapter).find(s=>!s.error&&s.scope?.contains(el))||{config:{}};
       return {label:resolved,tokens:[resolved],...contextFor(el,adapterScope),regionRole:structure.regionRole,regionLevel:structure.regionLevel,datePart:structure.datePart,datePath:structure.datePath,type:kind(el)};
     },
-    async fill(el,value){if(busy)throw Error('正在填写，请稍后');busy=true;try{const d=descriptor(el,document);d.scanUrl=location.href;const result=await C.fill(d,value,true);if(result.status==='filled'){await new Promise(r=>setTimeout(r,350));return C.verify(d,value);}return result;}finally{busy=false;}}
+    async fill(el,value){if(selectedScope)throw Error('区块模式请在插件预览中核对路径后填写');if(busy)throw Error('正在填写，请稍后');busy=true;try{const d=descriptor(el,document);d.scanUrl=location.href;const result=await C.fill(d,value,true);if(result.status==='filled'){await new Promise(r=>setTimeout(r,350));return C.verify(d,value);}return result;}finally{busy=false;}}
   };
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
-    if(message.type==='RF_CANCEL'){operationController?.abort();respond({cancelled:true});return;}
-    if(!['RF_SCAN','RF_FILL','RF_VERIFY','RF_PREPARE','RF_OCR_CONTEXT','RF_OCR_APPLY','RF_OCR_HIGHLIGHT'].includes(message.type))return;
+    if(message.type==='RF_CANCEL'){operationController?.abort();Promise.resolve(pendingOperation).catch(()=>{}).then(()=>respond({cancelled:true}));return true;}
+    if(!['RF_SCOPE_LIST','RF_SCOPE_SET','RF_SCAN','RF_FILL','RF_VERIFY','RF_PREPARE','RF_OCR_CONTEXT','RF_OCR_APPLY','RF_OCR_HIGHLIGHT'].includes(message.type))return;
     if(busy){respond({error:'上一项操作尚未结束'});return;}
     busy=true;
-    (async()=>{
+    pendingOperation=(async()=>{
+      if(message.type==='RF_SCOPE_LIST')return {scopes:scopeList()};
+      if(message.type==='RF_SCOPE_SET')return chooseScope(message);
       if(message.type==='RF_OCR_CONTEXT')return ocrContext();
       if(message.type==='RF_OCR_HIGHLIGHT'){if(JSON.stringify(message.context)!==JSON.stringify(ocrContext())||!registry.has(message.id))throw Error('页面已变化，请重新识别');registry.get(message.id).el.animate([{outline:'3px solid #0d8b68',outlineOffset:'3px'},{outline:'3px solid transparent',outlineOffset:'3px'}],{duration:1800});return {highlighted:true};}
       if(message.type==='RF_OCR_APPLY'){if(JSON.stringify(message.context)!==JSON.stringify(ocrContext()))throw Error('页面已变化，OCR 建议失效');if(!Array.isArray(message.items)||message.items.length>200)throw Error('OCR 建议无效');for(const item of message.items){const d=registry.get(item.id);if(!d?.field.ocrEligible||typeof item.label!=='string'||!item.label.trim()||item.label.length>40||/密码|验证码|password|captcha|\botp\b/i.test(item.label))throw Error('OCR 不能覆盖现有标签或保护字段');}for(const item of message.items){const d=registry.get(item.id);ocrLabels.set(d.el,{label:item.label,position:d.field.position,viewport:viewport()});}return {approved:message.items.length};}
@@ -148,7 +209,8 @@
       if(message.type==='RF_PREPARE')return prepare(message.counts||{});
       if(message.type==='RF_FILL')return fill(message);
       return Promise.all(message.items.map(async item=>({id:item.id,...(registry.has(item.id)?await C.verify(registry.get(item.id),item.value):{status:'stale'})})));
-    })().then(respond,e=>respond({error:e.message})).finally(()=>busy=false);
+    })().finally(()=>busy=false);
+    pendingOperation.then(respond,e=>respond({error:e.message}));
     return true;
   });
 })();

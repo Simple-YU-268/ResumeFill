@@ -53,7 +53,7 @@
     return out;
   }
   function match(field, values) {
-    if(field.ambiguousLabel)return null;
+    if(field.ambiguousLabel||field.contextBlocked)return null;
     if(/验证码|校验码|密码|captcha|password|verification.?code|\botp\b/i.test(field.label||''))return null;
     const semantic=infer(field);
     if(semantic&&Object.hasOwn(values,semantic.path))return semantic;
@@ -91,7 +91,7 @@
     return ranked[0];
   }
   function infer(field){
-    if(field.ambiguousLabel)return null;
+    if(field.ambiguousLabel||field.contextBlocked)return null;
     if(field.datePart&&field.datePath)return {path:field.datePath+'Parts.'+field.datePart,score:100};
     if(field.regionRole&&field.regionLevel){
       const group={current:'currentResidence',hukou:'hukou',native:'nativeRegion'}[field.regionRole];
@@ -103,6 +103,63 @@
     const hits=Object.entries(aliases).filter(([path,names])=>path.startsWith('basics.')&&names.some(n=>normalize(n)===label));
     return hits.length===1?{path:hits[0][0],score:100}:null;
   }
-  root.ResumeMatcher={flatten,match,infer,normalize,enums,enumKey,canonicalOption};
+  // Keep units and interval boundaries. A shared endpoint is deliberately ambiguous.
+  function numericInterval(value,field={}){
+    let s=String(value??'').normalize('NFKC').toLowerCase().replace(/\s+/g,'').replace(/[～~—–至]/g,'-');
+    const label=String(field.label||'').toLowerCase(),source=String(field.sourcePath||field.path||'').toLowerCase(),salary=/薪|工资|salary|收入/.test(label+source);
+    const period=t=>/月薪|月工资|\/月|每月|monthly/.test(t)?'month':/年薪|年工资|\/年|每年|annual|yearly/.test(t)?'year':null;
+    const explicitPeriod=period(s),labelPeriod=period(label),sourcePeriod=period(source);
+    if(new Set([explicitPeriod,labelPeriod,sourcePeriod].filter(Boolean)).size>1)return null;
+    let unit='',factor=1;
+    if(salary||/元|[万千k]|rmb/.test(s)){
+      const p=explicitPeriod||sourcePeriod||labelPeriod;if(!p)return null;
+      unit='salary:'+p;
+      const units=s.match(/万|千|k/g)||[];if(new Set(units).size>1)return null;
+      const leftScale=s.match(/\d(?:\.\d+)?(万|千|k)(?:元)?-/)?.[1];if(leftScale&&!s.split('-').at(-1).includes(leftScale))return null;
+      factor=units[0]==='万'?10000:units.length?1000:/万元/.test(label)?10000:/千元/.test(label)?1000:1;
+      s=s.replace(/月薪|年薪|月工资|年工资|每月|每年|monthly|annual|rmb|人民币|元|万|千|k|\/月|\/年/g,'');
+    }else if(/年|月|岁|years?|months?/.test(s)||/年限|工龄|年龄|工作经验|years?/.test(label)){
+      if(/岁/.test(s)||/年龄/.test(label))unit='age';else unit='duration';
+      if(/月|months?/.test(s))factor=1/12;
+      if(/年/.test(s)&&/月/.test(s))return null;
+      s=s.replace(/years?|months?|年|个月|月|周岁|岁/g,'');
+    }else return null;
+    const n='(\\d+(?:\\.\\d+)?)';let m,lo,hi,lc=true,hc=true;
+    if((m=s.match(new RegExp('^([\\[(])'+n+'[,-]'+n+'([\\])])$')))){lo=+m[2];hi=+m[3];lc=m[1]==='[';hc=m[4]===']';}
+    else if((m=s.match(new RegExp('^'+n+'-'+n+'$')))){lo=+m[1];hi=+m[2];}
+    else if((m=s.match(new RegExp('^(>=|>|<=|<|≥|≤|超过|大于|不少于|至少|不足|小于|不超过|至多)'+n+'$')))){
+      const lower=['>=','>','≥','超过','大于','不少于','至少'].includes(m[1]);lo=lower?+m[2]:-Infinity;hi=lower?Infinity:+m[2];lc=!['>','超过','大于'].includes(m[1]);hc=!['<','不足','小于'].includes(m[1]);
+    }else if((m=s.match(new RegExp('^'+n+'(以上|及以上|以下|及以下|以内|不含以上|不含以下)$')))){
+      const lower=m[2].endsWith('以上');lo=lower?+m[1]:-Infinity;hi=lower?Infinity:+m[1];lc=hc=!m[2].startsWith('不含');
+    }else if((m=s.match(new RegExp('^'+n+'$')))){lo=hi=+m[1];}
+    else return null;
+    if(lo>hi||lo===hi&&(!lc||!hc))return null;
+    return {lo:lo*factor,hi:hi*factor,lc,hc,unit};
+  }
+  function numericOptions(value,candidates,field={}){
+    const point=numericInterval(value,field);
+    if(point&&point.lo!==point.hi){const hits=candidates.filter(c=>optionNorm(c.text??c.textContent)===optionNorm(value));return {handled:true,hits,reason:hits.length===1?'明确区间原文匹配':'区间值需选择唯一同文选项'};}
+    if(!point||point.lo!==point.hi)return {handled:/\d/.test(String(value))&&/薪|工资|salary|收入/i.test((field.label||'')+(field.sourcePath||field.path||'')),hits:[],reason:'薪资单位或周期不明确，请人工选择'};
+    const hits=candidates.filter(c=>{const r=numericInterval(c.text??c.textContent,{...field,path:null,sourcePath:null});return r&&r.unit===point.unit&&(point.lo>r.lo||point.lo===r.lo&&r.lc)&&(point.hi<r.hi||point.hi===r.hi&&r.hc);});
+    return {handled:true,hits,reason:hits.length>1?'数值区间边界重叠，请人工选择':hits.length?'唯一同单位区间':'没有同单位的明确区间，请人工选择'};
+  }
+  function allowedPath(field,path){
+    if(field.contextBlocked)return false;
+    const section=field.section;if(!['basics','education','work','projects'].includes(section))return true;
+    return path.startsWith(section+'.')&&(!Number.isInteger(field.recordIndex)||section==='basics'||path.startsWith(section+'.'+field.recordIndex+'.'));
+  }
+  function candidatePaths(field,values){
+    if(field.ambiguousLabel)return [];
+    const eligible=Object.keys(values).filter(p=>String(values[p]??'').trim()&&allowedPath(field,p)&&!p.startsWith('fieldAnswers.'));
+    const known=infer(field);if(known)return eligible.includes(known.path)?[known.path]:[];
+    const label=normalize(field.label),scored=eligible.map(path=>{
+      const names=aliases[path.replace(/\.\d+\./g,'.*.')]||[path.split('.').at(-1)];
+      const score=Math.max(0,...names.map(name=>{const n=normalize(name);if(n===label)return 100;if(n.length>=2&&(label.includes(n)||n.includes(label)))return 60;let overlap=0;for(let i=0;i<label.length-1;i++)if(n.includes(label.slice(i,i+2)))overlap++;return overlap*5;}));return {path,score};
+    }).sort((a,b)=>b.score-a.score);
+    const relevant=scored.filter(c=>c.score>=Math.max(1,(scored[0]?.score||0)*.5));if(relevant.length)return relevant.slice(0,12).map(c=>c.path);
+    // Unknown labels may use only a small, explicitly identified record. Otherwise abstain.
+    return field.section&&Number.isInteger(field.recordIndex)&&eligible.length<=12?eligible:[];
+  }
+  root.ResumeMatcher={flatten,match,infer,normalize,enums,enumKey,canonicalOption,numericInterval,numericOptions,allowedPath,candidatePaths};
   if (typeof module!=='undefined') module.exports=root.ResumeMatcher;
 })(globalThis);
