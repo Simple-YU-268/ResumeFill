@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.12.0 on 2026-10-16.
+Reviewed for v0.16.0 on 2026-10-19. Earlier review: v0.12.0.
 
 The development workspace contains private files. This review applies only to the Git publication inventory and freshly built release runtime, not to every file elsewhere on the machine.
 
@@ -9,7 +9,14 @@ The development workspace contains private files. This review applies only to th
 - Only this standalone repository is published. External research folders, candidate documents, job-tracking records and browser profiles are outside its scope.
 - Personal resume JSON, images, PDFs, checkpoints, local configuration, connection tokens, logs, installed dependencies and build outputs are ignored by Git. Ignored files must never be force-added.
 - Tests use synthetic candidates and temporary directories, including generated image-only PDFs for real offline OCR tests. Machine-specific home-directory paths have been replaced with portable dependencies or environment configuration.
-- Runtime resources use an explicit file allowlist. Personal profile and connection files are created in user data after installation and are not bundled.
+- Runtime resources use an explicit file allowlist. Personal profile, pairing tickets and connection files are created in user data after installation and are not bundled.
+
+## Local secrets (0.16.0)
+
+- The desktop encrypts the gateway token and provider API key at rest with Electron safeStorage (DPAPI on Windows). Plaintext configurations are migrated on first launch. A configuration sealed on another machine fails closed rather than decrypting silently.
+- Connection files contain only a one-time pairing code, valid for 10 minutes and invalidated after redemption or a newer export. The long-lived token stays in the gateway process and the extension session store; it is never written by the extension or included in exported files.
+- The loopback gateway rejects desktop, Agent, webpage-OCR and pairing requests without an extension Origin, and records desktop sync actions in a bounded in-memory audit (no profile values are logged).
+- Model provider keys continue to reside only in the desktop configuration and are never imported into the extension.
 
 ## Checks
 

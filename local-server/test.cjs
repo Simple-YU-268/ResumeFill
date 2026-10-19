@@ -20,6 +20,7 @@ const option={kind:'options',version:1,fieldId:'f2',label:'学历',path:'educati
   assert.throws(()=>Options.parse({candidateId:'invented',confidence:1},option));assert.throws(()=>Options.parse({candidateId:'a',confidence:1},ambiguous));
   const compatible=await (await post(base+'/v1/chat/completions',{model:'ignored',messages:[{role:'system',content:'untrusted client prompt'},{role:'user',content:JSON.stringify(packet)}]})).json();assert.equal(JSON.parse(compatible.choices[0].message.content).matches[0].path,'basics.email');
   assert.equal((await post(base+'/v1/match-fields',{bad:true})).status,400);
+  assert.equal((await (await post(base+'/v1/match-fields',{bad:true})).json()).code,'RF_PACKET_INVALID','errors carry structured codes');
   assert.equal((await post(base+'/v1/match-fields',{data:'x'.repeat(210000)})).status,413);
  }finally{await local.close();}
  let calls=0,seen=[],hangClosed=false;
@@ -38,4 +39,19 @@ const option={kind:'options',version:1,fieldId:'f2',label:'学历',path:'educati
  const bad=createGateway({port:0,token,upstream:{enabled:true,endpoint:endpoint+'/bad',model:'mock'}});try{base='http://127.0.0.1:'+(await bad.listen()).port;assert.equal((await post(base+'/v1/match-fields',packet)).status,400);}finally{await bad.close();}
  const slow=createGateway({port:0,token,timeoutMs:150,upstream:{enabled:true,endpoint:endpoint+'/hang',model:'mock'}});try{base='http://127.0.0.1:'+(await slow.listen()).port;assert.equal((await post(base+'/v1/match-fields',packet)).status,504);await new Promise(r=>setTimeout(r,50));assert.equal(hangClosed,true);}finally{await slow.close();await new Promise(r=>upstream.close(r));upstream.closeAllConnections();}
  console.log('PASS: loopback gateway authentication/origin/host, local matching, options, cache, compatible endpoint, body limits, upstream isolation/retry, response validation, timeout abort');
+let outstanding='p'.repeat(64);
+const sensitiveGateway=createGateway({port:0,token,desktopHandler:action=>({ok:true,action}),pairing:{redeem:code=>{if(code!==outstanding)return null;outstanding=null;return token;}}});
+try{const sensitiveBase='http://127.0.0.1:'+(await sensitiveGateway.listen()).port;
+ const noOrigin=await fetch(sensitiveBase+'/v1/desktop/pull',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'});assert.equal(noOrigin.status,403,'desktop endpoints reject requests without an Origin');
+ const badOrigin=await fetch(sensitiveBase+'/v1/agent/status',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token,Origin:'https://evil.test'},body:'{}'});assert.equal(badOrigin.status,403);
+ assert.equal((await post(sensitiveBase+'/v1/desktop/pull',{})).status,200,'extension origin with token still works');
+ const pair=code=>fetch(sensitiveBase+'/v1/pair',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({code})});
+ const pairNoOrigin=await fetch(sensitiveBase+'/v1/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:'q'.repeat(64)})});assert.equal(pairNoOrigin.status,403,'pairing requires an extension Origin');
+ assert.equal((await pair('r'.repeat(64))).status,401);assert.equal((await pair('p'.repeat(64))).status,200);
+ outstanding='s'.repeat(64);assert.equal((await pair('p'.repeat(64))).status,401,'redeemed codes do not work twice');
+ assert.equal((await pair('s'.repeat(64))).status,200);
+ for(let i=0;i<3;i++)assert.equal((await pair('t'.repeat(64))).status,401);
+ assert.equal((await pair('t'.repeat(64))).status,429,'pairing attempts are rate limited');
+}finally{await sensitiveGateway.close();}
+console.log('PASS: sensitive endpoints require extension origin, one-time pairing redemption, pairing rate limit');
 })().catch(e=>{console.error(e);process.exitCode=1});

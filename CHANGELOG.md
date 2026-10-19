@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.0 — 2026-10-19
+
+Security hardening for local secrets and the loopback gateway. The desktop now encrypts the gateway token and provider API key at rest with Electron safeStorage (DPAPI on Windows). Plaintext configurations are migrated on first launch; a sealed configuration without local encryption fails closed instead of falling back to plaintext. Connection files become one-time pairing tickets: the long-lived token never leaves the gateway, the extension redeems the code through the loopback gateway into session storage only, codes expire after 10 minutes, are invalidated on redemption or replacement, and pairing attempts are rate-limited. Desktop, Agent and webpage-OCR endpoints now require an extension Origin even with a valid token; the pairing endpoint requires one as well. Desktop sync actions (pull/push/heartbeat) are recorded in a bounded in-memory audit surfaced in the management UI. Gateway, desktop and PDF errors carry stable RF_* codes instead of regex text matching, and version strings for /health and the upstream User-Agent are derived from package metadata. Legacy long-token connection files remain accepted for standalone gateways; the desktop no longer exports them.
+
 ## 0.15.0 — 2026-10-19
 
 Completes the A–E matching upgrade: nearest-left table labels and strict DT/DD ownership with nested-help filtering; shared numeric interval matching with explicit open/closed boundaries and monthly/annual salary isolation; ARIA-first async dropdown ownership and enabled candidate checks; user-selected container preview/fill with per-record path restrictions and stale-scope rejection; unresolved-only model requests with at most 12 relevant paths per field and per-field response validation. Indexed virtual lists retain the 500-item / 40-page bound; unindexed or incomplete lists remain manual.
