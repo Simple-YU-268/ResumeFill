@@ -10,8 +10,12 @@
   "scripts": {
     "test": "node scripts/test.cjs",
     "test:browser": "node scripts/test.cjs --browser",
+    "test:desktop": "npm --prefix desktop test && node desktop/extension-test.cjs",
+    "test:electron": "node desktop/ui-test.cjs && node desktop/pdf-test.cjs && node desktop/auth-ui-test.cjs",
+    "test:all": "npm test && npm run test:browser && npm run test:desktop && npm run test:electron",
     "privacy": "node scripts/check-public-package.cjs",
     "privacy:artifacts": "node scripts/check-public-package.cjs --artifacts",
+    "version:check": "node scripts/check-version.cjs",
     "build": "npm --prefix desktop run dist"
   },
   "devDependencies": {

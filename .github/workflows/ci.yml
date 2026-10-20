@@ -14,12 +14,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run version:check
       - run: npm run privacy
       - run: npm test
       - run: npm --prefix desktop ci
       - run: npm --prefix desktop run prepare:resources
       - run: npm --prefix desktop test
+      - run: node desktop/extension-test.cjs
       - run: node desktop/auth-ui-test.cjs
+      - run: node desktop/ui-test.cjs
+      - run: node desktop/pdf-test.cjs
       - run: npm run test:browser
       - run: node scripts/verify-ai-browser.cjs --mock
       - run: node desktop/ocr-test.cjs --engine-only

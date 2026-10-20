@@ -45,7 +45,7 @@ npm --prefix desktop start
 npm run build
 ```
 
-浏览器测试默认使用已安装的 Edge；可设置 BROWSER_CHANNEL=chromium 并先运行 npx playwright install chromium，或通过 BROWSER_EXECUTABLE 指定浏览器。运行 npm run test:browser；桌面 UI 与 PDF 集成测试分别为 node desktop/ui-test.cjs 和 node desktop/pdf-test.cjs。
+浏览器测试默认使用已安装的 Edge；可设置 BROWSER_CHANNEL=chromium 并先运行 npx playwright install chromium，或通过 BROWSER_EXECUTABLE 指定浏览器。运行 npm run test:browser；桌面控制器与扩展同步测试为 npm run test:desktop；Electron 界面与 PDF 集成测试为 npm run test:electron（本地无显示会话时自动跳过，CI 中强制运行）；npm run test:all 一次跑完全部。发版前用 npm run version:check 确认三处版本号一致。
 
 构建输出位于 dist/，不进入 Git。测试只使用合成资料与临时浏览器目录。公开前运行 npm run privacy；构建后运行 npm run privacy:artifacts。参见 [隐私检查](PRIVACY-REVIEW.md)、[版本记录](CHANGELOG.md) 和 [第三方许可](THIRD_PARTY_NOTICES.md)。
 

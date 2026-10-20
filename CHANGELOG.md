@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — engineering
+
+- CI now runs every automated suite: desktop extension sync, Electron UI profile editing, PDF import flow and the version consistency check (scripts/check-version.cjs asserts package.json, desktop/package.json and manifest.json stay aligned). New npm scripts: test:desktop, test:electron, test:all, version:check.
+- The installer build workflow also uploads latest.yml and the NSIS blockmap, so CI-built releases can feed in-app updates.
+- Electron GUI tests (ui-test, pdf-test, auth-ui-test) skip gracefully with a clear message when no display session is available locally; they still fail hard in CI.
+- Docs: MIGRATION.md renamed to FEATURES-0.2.md to match the FEATURES-*.md series; personal record-keeping statements removed from public feature records.
+
 ## 0.18.0 — 2026-10-20
 
 Adds in-app updates for the Windows desktop via electron-updater against GitHub Releases. The overview section gains "check for updates" with an inline state line (checking / available / downloading / ready / error), on-demand download and restart-to-install; downloads never start automatically and installation requires an explicit click. A persisted "check on startup" toggle (default on) controls the silent startup check, which runs only in installed builds. Update verification uses the SHA-512 metadata in latest.yml; releases now attach latest.yml and the NSIS blockmap. The installer remains unsigned; Windows may show a SmartScreen prompt. Checking for updates contacts the GitHub API and the release asset CDN only; no personal data is sent. Update checks are unavailable in unpackaged development runs.
