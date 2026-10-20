@@ -21,23 +21,29 @@ $('saveAI').onclick=()=>safe(async()=>{
   if(config.enabled&&(!previous?.endpoint||new URL(previous.endpoint).origin!==new URL(config.endpoint).origin))await chrome.storage.session.remove('aiApiKey');
   await chrome.storage.local.set({aiSettings:config});
   if($('aiKey').value){await chrome.storage.session.set({aiApiKey:ResumeAI.normalizeKey($('aiKey').value)});$('aiKey').value='';}
-  status(config.enabled?'AI 已启用；默认只发送字段描述与 JSON 路径。':'AI 已关闭');
+  status(config.enabled?'AI 已启用；默认只发送字段描述与 JSON 路径。':'AI 已关闭');refreshDesktopState();
 });
 $('clearKey').onclick=()=>safe(async()=>{await chrome.storage.session.remove('aiApiKey');$('aiKey').value='';status('会话密钥已清除');});
 $('testAI').onclick=()=>safe(async()=>{status('正在用虚构邮箱字段测试连接…');const r=await chrome.runtime.sendMessage({type:'RF_AI_TEST',requestId:crypto.randomUUID()});if(r?.error)throw Error(r.error);status(r.accepted?.some(m=>m.path==='basics.email')?'连接和路径协议通过；仅使用虚构字段，未发送简历。'+(r.gateway?' 服务模式：'+r.gateway.engine:''):'服务已响应，但虚构字段未获得有效匹配');});
 
-$('gatewayImport').onchange=()=>safe(async()=>{const file=$('gatewayImport').files[0];if(!file)return;const data=JSON.parse(await file.text());const u=new URL(data.endpoint);if(data.version!==1||u.protocol!=='http:'||!['127.0.0.1','localhost'].includes(u.hostname)||u.pathname!=='/v1/chat/completions'||u.username||u.password||u.search||u.hash)throw Error('不是有效的本地服务连接文件');let token=null;
+async function applyConnection(data){const u=new URL(data.endpoint);if(data.version!==1||u.protocol!=='http:'||!['127.0.0.1','localhost'].includes(u.hostname)||u.pathname!=='/v1/chat/completions'||u.username||u.password||u.search||u.hash)throw Error('不是有效的本地服务连接文件');
  if(data.kind==='resumefill-pairing'){
-  if(typeof data.code!=='string'||data.code.length<32||data.code.length>256)throw Error('配对文件缺少有效配对码');
-  if(typeof data.expiresAt==='number'&&Date.now()>data.expiresAt)throw Error('配对码已过期，请在桌面端重新导出');
+  if(typeof data.code!=='string'||data.code.length<32||data.code.length>256)throw Error('配对内容缺少有效配对码');
+  if(typeof data.expiresAt==='number'&&Date.now()>data.expiresAt)throw Error('配对码已过期，请在桌面端重新获取');
   if(!await chrome.permissions.contains({origins:[u.origin+'/']})&&!await chrome.permissions.request({origins:[u.origin+'/']}))throw Error('本机服务地址未授权，无法完成配对');
   const r=await fetch(u.origin+'/v1/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:data.code}),signal:AbortSignal.timeout(5000),redirect:'error',credentials:'omit'});const d=await r.json().catch(()=>({}));
   if(!r.ok||typeof d.token!=='string'||d.token.length<32||d.token.length>256)throw Error(d.error||'配对失败，配对码可能已被使用或过期');
-  token=d.token;
- }else if(data.kind==='resumefill-local-gateway'){
-  if(typeof data.token!=='string'||data.token.length<32||data.token.length>256)throw Error('不是有效的本地服务连接文件');token=data.token;
- }else throw Error('不是有效的本地服务连接文件');
- $('aiEnabled').checked=true;$('aiEndpoint').value=u.href;$('aiModel').value='resumefill-local';$('aiJson').checked=true;$('aiKey').value=token;status(data.kind==='resumefill-pairing'?'配对成功，令牌仅保存在本次浏览器会话；点击保存 AI 设置完成授权。上游云模型密钥不会导入插件。':'本地连接已载入；点击保存 AI 设置授权本机地址，再测试连接。上游云模型密钥不会导入插件。');});
+  const config=ResumeAI.settings({enabled:true,endpoint:u.href,model:'resumefill-local',jsonMode:true});
+  await chrome.storage.local.set({aiSettings:config});await chrome.storage.session.set({aiApiKey:ResumeAI.normalizeKey(d.token)});
+  $('aiEnabled').checked=true;$('aiEndpoint').value=u.href;$('aiModel').value='resumefill-local';$('aiJson').checked=true;$('aiKey').value='';$('pairingCode').value='';
+  status('配对成功，已连接桌面端；令牌仅保存在本次浏览器会话。上游云模型密钥不会导入插件。');refreshDesktopState();return;
+ }
+ if(data.kind!=='resumefill-local-gateway'||typeof data.token!=='string'||data.token.length<32||data.token.length>256)throw Error('不是有效的本地服务连接文件');
+ $('aiEnabled').checked=true;$('aiEndpoint').value=u.href;$('aiModel').value='resumefill-local';$('aiJson').checked=true;$('aiKey').value=data.token;status('本地连接已载入；点击保存 AI 设置授权本机地址，再测试连接。上游云模型密钥不会导入插件。');}
+$('gatewayImport').onchange=()=>safe(async()=>{const file=$('gatewayImport').files[0];if(!file)return;await applyConnection(JSON.parse(await file.text()));});
+$('pairDesktop').onclick=()=>safe(async()=>{const raw=$('pairingCode').value.trim();if(!raw)throw Error('请先从桌面端复制配对码并粘贴到此处');await applyConnection(JSON.parse(raw));});
+async function refreshDesktopState(){if(!$('desktopState'))return;const {aiSettings}=await chrome.storage.local.get('aiSettings');const {aiApiKey}=await chrome.storage.session.get('aiApiKey');const local=aiSettings?.enabled&&/^http:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(aiSettings.endpoint||'');$('desktopState').textContent=local?(aiApiKey?'已连接桌面端（本次会话有效），可在下方读取或同步资料':'桌面端已配置，会话令牌已过期或浏览器重启过，请重新配对'):'未连接桌面端';}
+safe(refreshDesktopState);
 const desktopActions=document.createElement('div');desktopActions.className='actions';
 for(const [label,type]of [['从桌面端读取资料','RF_DESKTOP_PULL'],['将扩展已保存资料同步到桌面','RF_DESKTOP_PUSH']]){const button=document.createElement('button');button.textContent=label;button.onclick=()=>safe(async()=>{const r=await chrome.runtime.sendMessage({type});if(r?.error)throw Error(r.error);if(type==='RF_DESKTOP_PULL'){$('json').value=JSON.stringify(r.resume,null,2);status('桌面资料已载入编辑器，核对后点击保存简历。');}else status('扩展中已保存的资料已同步到桌面。');});desktopActions.append(button);}$('status').before(desktopActions);
 setInterval(()=>chrome.runtime.sendMessage({type:'RF_DESKTOP_HEARTBEAT'}).catch(()=>{}),30000);

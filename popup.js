@@ -27,7 +27,7 @@ async function scan(incremental=false){
   snapshot=await send({type:'RF_SCAN',adapters:data.adapters||{version:1,adapters:[]},counts:Object.fromEntries(['education','work','projects'].map(key=>[key,resume[key]?.length||0]))});
   agentNeedsRescan=false;$('scopeStatus').textContent=snapshot.selectedScope?'当前仅处理：'+snapshot.selectedScope.section+' · 从第 '+((snapshot.selectedScope.recordIndex??0)+1)+' 条经历开始':'当前处理整页';
   const rules=data.rules?.[ruleKey()]||{};
-  $('fields').replaceChildren();rows=[];
+  $('fields').replaceChildren();rows=[];$('resultCard').hidden=true;$('resultCard').replaceChildren();
   for(const field of snapshot.fields){
     const guess=ResumeAnswers.match(field,resume,snapshot)||(field.path?{path:field.path}:ResumeMatcher.match(field,values)||ResumeMatcher.infer(field));
     if(guess?.path&&!Object.hasOwn(values,guess.path))values[guess.path]='';
@@ -72,13 +72,21 @@ $('fill').onclick=()=>run(async()=>{
   const items=rows.filter(r=>(!r.verified||$('saveCards').checked)&&r.select.value&&values[r.select.value]).map(r=>({id:r.field.id,path:r.select.value,value:optionMappings[optionKey(r)]||values[r.select.value],verifyOnly:r.verified}));
   const response=await send({type:'RF_FILL',overwrite:$('overwrite').checked,saveCards:$('saveCards').checked,items});
   const final=new Map(response.results.map(r=>[r.id,r]));
-  rows.forEach(r=>{const result=final.get(r.field.id);if(result)r.verified=result.status==='verified';r.small.textContent=result?[labels[result.status]||result.status,result.error].filter(Boolean).join('：'):r.verified?'已回读一致，本轮跳过':'未填：未匹配或没有资料';});
+  rows.forEach(r=>{const result=final.get(r.field.id);if(result)r.verified=result.status==='verified';r.resultStatus=result?result.status:(r.verified?'verified':'unmatched');r.small.textContent=result?[labels[result.status]||result.status,result.error].filter(Boolean).join('：'):r.verified?'已回读一致，本轮跳过':'未填：未匹配或没有资料';});
   for(const r of rows){const result=final.get(r.field.id);if(result?.status==='failed'&&result.candidates?.length)renderOptions(r,result.candidates);}
   const verified=response.results.filter(r=>r.status==='verified').length,preserved=response.results.filter(r=>r.status==='preserved').length,failed=response.results.length-verified-preserved,skipped=rows.length-items.length;
   const checkpoint={schema_version:3,extension_version:chrome.runtime.getManifest().version,updated_at:new Date().toISOString(),page:snapshot.origin+snapshot.page,adapter:snapshot.adapter,fingerprint:snapshot.fingerprint,state:'review_required',submission_verified:false,counts:{verified,preserved,failed,skipped},sections:snapshot.sectionIssues,coverage:snapshot.coverage,saves:response.saves,fields:rows.map(r=>({label:r.field.label,section:r.field.section,recordIndex:r.field.recordIndex,path:r.select.value,required:r.field.required,type:r.field.type,evidence:r.field.evidence,context:r.field.context,regionRole:r.field.regionRole,regionLevel:r.field.regionLevel,ambiguousLabel:!!r.field.ambiguousLabel,options:(r.field.options||[]).slice(0,60),status:final.get(r.field.id)?.status||(r.verified?'verified':'unmatched'),error:final.get(r.field.id)?.error||''}))};
   await chrome.storage.local.set({lastCheckpoint:checkpoint});
+  renderResults();
   status(`回读一致 ${verified} · 保留 ${preserved} · 失败 ${failed} · 未填 ${skipped}\n`+response.saves.map(s=>`${s.section} 第 ${s.index+1} 条：${s.status==='save_indicator_observed'?'已观察到页面保存标识':s.error}`).join('\n')+'\n请核对网页；未检查其他分页或服务器保存状态。');
 });
+function renderResults(){const card=$('resultCard');card.replaceChildren();const done=rows.filter(r=>r.resultStatus);if(!done.length){card.hidden=true;return;}card.hidden=false;
+ const count=s=>rows.filter(r=>r.resultStatus===s).length;const failedRows=rows.filter(r=>r.resultStatus&&!['verified','preserved'].includes(r.resultStatus));
+ const head=document.createElement('strong');head.textContent=`本次结果：回读一致 ${count('verified')} · 保留原值 ${count('preserved')} · 待处理 ${failedRows.length}`;card.append(head);
+ for(const r of failedRows){const line=document.createElement('div');line.className='result-row';const text=document.createElement('span');text.textContent=`${r.field.label}：${labels[r.resultStatus]||'未填写'}`;line.append(text);
+  if(r.select.value&&values[r.select.value]){const retry=document.createElement('button');retry.type='button';retry.textContent='重试此字段';retry.onclick=()=>run(async()=>{const response=await send({type:'RF_FILL',overwrite:$('overwrite').checked,saveCards:$('saveCards').checked,items:[{id:r.field.id,path:r.select.value,value:optionMappings[optionKey(r)]||values[r.select.value]}]});const result=response.results[0];r.resultStatus=result?.status||'failed';r.verified=result?.status==='verified';r.small.textContent=result?[labels[result.status]||result.status,result.error].filter(Boolean).join('：'):'未填';if(result?.status==='failed'&&result.candidates?.length)renderOptions(r,result.candidates);renderResults();status(r.verified?'重试成功，回读一致。':'重试仍未通过：'+(result?.error||'请检查字段'),r.verified?'':'error');});line.append(retry);}
+  card.append(line);}
+ const note=document.createElement('p');note.className='muted';note.textContent='请核对网页；未检查其他分页或服务器保存状态。';card.append(note);}
 function optionKey(r){return ruleKey()+'::'+ruleField(r.field)+'::'+r.select.value+'::'+values[r.select.value];}
 function optionAIButton(r,candidates,select,box){const ask=document.createElement('button');ask.type='button';ask.textContent='AI 建议真实选项';ask.onclick=async()=>{try{
   if(!$('shareValues').checked)throw Error('选项匹配需发送此字段值和候选项，请先勾选附带简历值');
