@@ -1,4 +1,4 @@
-importScripts('profile.js','matcher.js','option-match.js','ai.js','answers.js');
+importScripts('profile.js','matcher.js','option-match.js','answers.js','ai.js');
 const requests=new Map();
 chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
 chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});

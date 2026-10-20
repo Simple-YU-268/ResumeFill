@@ -22,6 +22,7 @@ node_modules/
 desktop/node_modules/
 desktop/resources/
 desktop/ui/matcher.js
+desktop/ui/field-labels.js
 dist/
 tmp/
 .cache/

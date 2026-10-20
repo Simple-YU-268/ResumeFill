@@ -1,6 +1,6 @@
 /* All imported labels and answers are data; never insert HTML from a profile. */
 (()=>{
-const names={basics:'基本信息',education:'教育经历',work:'工作 / 实习',projects:'项目经历',skills:'技能与简介',custom:'补充信息',fieldAnswers:'网站补充答案',other:'其他资料',name:'姓名',email:'电子邮箱',phone:'手机号码',city:'所在城市',gender:'性别',birthday:'出生日期',website:'个人主页',idNumber:'身份证号码',idCard:'身份证号码',nationality:'国籍',ethnicity:'民族',politicalStatus:'政治面貌',maritalStatus:'婚姻状况',hukouAddress:'户籍地址',hukou:'户籍地区',nativePlace:'籍贯',nativeRegion:'籍贯地区',address:'现居地址',currentResidence:'现居地区',province:'省 / 直辖市',county:'区 / 县',path:'完整地区',school:'学校名称',major:'专业',degree:'学历 / 学位',startDate:'开始时间',endDate:'结束时间',gpa:'绩点',ranking:'成绩排名',company:'公司名称',position:'职位名称',description:'内容与成果',role:'担任角色',url:'相关链接',summary:'个人简介',language:'语言能力',certificates:'证书',label:'问题名称',value:'回答',code:'地区代码'};
+const names={...window.ResumeFieldLabels.sections,...window.ResumeFieldLabels.fields};
 const basics=['name','gender','birthday','phone','email','city','idNumber','nationality','ethnicity','politicalStatus','maritalStatus','hukouAddress','nativePlace','address','website'];
 const recordKeys={education:['school','major','degree','startDate','endDate','gpa'],work:['company','position','startDate','endDate','description'],projects:['name','role','startDate','endDate','description']};
 const groups=['basics','education','work','projects','skills','custom','fieldAnswers','other'];

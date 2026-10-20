@@ -6,6 +6,7 @@
 - The installer build workflow also uploads latest.yml and the NSIS blockmap, so CI-built releases can feed in-app updates.
 - Electron GUI tests (ui-test, pdf-test, auth-ui-test) skip gracefully with a clear message when no display session is available locally; they still fail hard in CI.
 - Docs: MIGRATION.md renamed to FEATURES-0.2.md to match the FEATURES-*.md series; personal record-keeping statements removed from public feature records.
+- Shared modules: the protected-field regex is now defined once in answers.js (extended with 一次性.*码) and reused by ai.js via delegation; human-readable Chinese field labels live in the new field-labels.js (ResumeFieldLabels) shared by the popup review list, the desktop profile editor and the PDF import preview, each keeping only its presentation overrides. desktop/prepare.cjs copies the shared files into desktop/ui, the bundled extension resources and the resources root; note the extension release zip file list must include field-labels.js for future releases.
 
 ## 0.18.0 — 2026-10-20
 
