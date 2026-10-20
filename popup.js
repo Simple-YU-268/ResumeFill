@@ -3,9 +3,16 @@ let tabId,values={},snapshot,rows=[],resume;
 let aiSuggestions=null,aiRequestId=null,aiRevision=null;
 let optionMappings={};
 let agentRunning=false,agentNeedsRescan=false,lastAgentRun=null,agentPolling=false;
-const status=text=>$('status').textContent=text;
+const status=(text,state)=>{const el=$('status');el.textContent=text;el.dataset.state=state||'';};
 const labels={verified:'回读一致',preserved:'保留原值',stale:'字段失效',failed:'填写失败',invalid:'格式无效',mismatch:'值不一致',unconfirmed:'未确认选项'};
-async function run(fn){document.querySelectorAll('button').forEach(b=>b.disabled=b.id!=='cancelFill');try{await fn();}catch(e){status('操作失败：'+e.message);}finally{document.querySelectorAll('button').forEach(b=>b.disabled=false);$('scan').disabled=false;$('edit').disabled=false;$('fill').disabled=!rows.length;$('remember').disabled=!rows.length;$('prepare').disabled=!snapshot?.adapter;document.querySelectorAll('[data-always]').forEach(b=>b.disabled=false);}}
+const SECTION_NAMES={basics:'基本信息',education:'教育经历',work:'工作 / 实习',projects:'项目经历',skills:'技能',summary:'个人简介',custom:'补充信息',fieldAnswers:'网站补充答案'};
+const PATH_LABELS={basics:{name:'姓名',gender:'性别',birthday:'出生日期',phone:'手机号码',email:'电子邮箱',city:'现居城市',idNumber:'证件号码',nationality:'国籍',ethnicity:'民族',politicalStatus:'政治面貌',maritalStatus:'婚姻状况',hukouAddress:'户籍地址',hukou:'户籍地区',nativePlace:'籍贯',nativeRegion:'籍贯地区',address:'现居地址',currentResidence:'现居地区',website:'个人主页',wechat:'微信号'},education:{school:'就读院校',major:'专业',degree:'学历',startDate:'开始时间',endDate:'结束时间',gpa:'成绩 / GPA'},work:{company:'公司',position:'职位',startDate:'开始时间',endDate:'结束时间',description:'工作描述'},projects:{name:'项目名称',role:'承担角色',startDate:'开始时间',endDate:'结束时间',description:'项目描述'}};
+function pathLabel(path){const parts=String(path||'').split('.');const section=SECTION_NAMES[parts[0]]||parts[0];
+ if(parts[0]==='fieldAnswers')return '网站补充答案 · 第 '+(Number(parts[1])+1)+' 条';
+ if(['skills','summary','custom'].includes(parts[0]))return parts.length>1?section+' · '+parts.slice(1).join('.'):section;
+ if(parts.length===3)return section+' 第 '+(Number(parts[1])+1)+' 条 · '+(PATH_LABELS[parts[0]]?.[parts[2]]||parts[2]);
+ return parts.length===2?section+' · '+(PATH_LABELS[parts[0]]?.[parts[1]]||parts[1]):path;}
+async function run(fn){document.querySelectorAll('button').forEach(b=>b.disabled=b.id!=='cancelFill');try{await fn();}catch(e){status('操作失败：'+e.message,'error');}finally{document.querySelectorAll('button').forEach(b=>b.disabled=false);$('scan').disabled=false;$('edit').disabled=false;$('fill').disabled=!rows.length;$('remember').disabled=!rows.length;$('prepare').disabled=!snapshot?.adapter;document.querySelectorAll('[data-always]').forEach(b=>b.disabled=false);}}
 async function send(message){if(agentRunning&&message.type!=='RF_CANCEL')throw Error('Agent 正在操作页面，请先停止或等待');if(agentNeedsRescan&&!['RF_SCAN','RF_CANCEL'].includes(message.type))throw Error('Agent 已更新扫描，请先重新扫描页面');const result=await chrome.tabs.sendMessage(tabId,message);if(result?.error)throw Error(result.error);return result;}
 const ruleField=f=>JSON.stringify([f.label,f.section,f.recordIndex,f.type,f.path]);
 const ruleKey=()=>'matching-v2::'+snapshot.origin+snapshot.page+'::'+(new URL(snapshot.url).searchParams.get('formId')||'')+'::'+snapshot.fingerprint+'::'+(snapshot.adapter||'generic');
@@ -31,15 +38,19 @@ async function scan(incremental=false){
     const small=document.createElement('small');small.textContent=[field.context,Number.isInteger(field.recordIndex)?`第 ${field.recordIndex+1} 条`:'',field.evidence,field.matchWarning].filter(Boolean).join(' · ');left.append(small);
     const right=document.createElement('div'),select=document.createElement('select');select.setAttribute('aria-label',field.label+' 对应简历字段');
     const blank=document.createElement('option');blank.value='';blank.textContent='跳过 / 尚未确定匹配';select.append(blank);
-    for(const path of Object.keys(values).filter(p=>!snapshot.selectedScope||ResumeMatcher.allowedPath(field,p))){const option=document.createElement('option');option.value=path;option.textContent=path;select.append(option);}
+    for(const path of Object.keys(values).filter(p=>!snapshot.selectedScope||ResumeMatcher.allowedPath(field,p))){const option=document.createElement('option');option.value=path;option.textContent=pathLabel(path);option.title=path;select.append(option);}
     select.value=chosen;const preview=document.createElement('input');preview.readOnly=true;preview.setAttribute('aria-label','填充值预览');
     const draft=document.createElement('textarea');draft.rows=2;draft.setAttribute('aria-label',field.label+' 补充资料');draft.maxLength=20000;
-    const state={field,select,key,small,verified:!!(same&&old.verified),preview,draft};
+    const state={field,select,key,small,verified:!!(same&&old.verified),preview,draft,row};
     const update=()=>{preview.value=values[select.value]||'';draft.hidden=!!preview.value||ResumeAnswers.protectedField(field);draft.placeholder=select.value?`已识别 ${select.value}，资料值为空，请补充后保存`:field.ambiguousLabel?'经历或字段归属不明确，请选择区块后重新扫描':field.contextBlocked?'此类经历尚无专用资料结构，可手动选取或保存本页补充答案':'尚未确定对应资料，请先选择已有 JSON 字段；确实缺少时再补充保存';};select.onchange=()=>{state.verified=false;update();summary();};update();
     right.append(select,preview,draft);row.append(left,right);$('fields').append(row);rows.push(state);
   }
   const prior=rows.filter(r=>r.verified&&r.select.value);
   if(prior.length){const checked=await send({type:'RF_VERIFY',items:prior.map(r=>({id:r.field.id,value:values[r.select.value]}))});const verified=new Set(checked.filter(r=>r.status==='verified').map(r=>r.id));prior.forEach(r=>{r.verified=verified.has(r.field.id);if(r.verified)r.small.textContent='已重新回读一致，本轮跳过';});}
+  // Unresolved fields first (required first), so review starts at the top.
+  const order=r=>r.select.value&&values[r.select.value]?2:(r.field.required?0:1);
+  [...rows].sort((a,b)=>order(a)-order(b)).forEach(r=>$('fields').append(r.row));
+  $('scan').classList.remove('primary');
   summary();status(snapshot.sectionIssues.length?snapshot.sectionIssues.map(s=>`${s.section}：${s.error}`).join('\n'):'核对匹配后填写。多段经历可先补齐卡片。');
 }
 function summary(){const matched=rows.filter(r=>r.select.value&&values[r.select.value]).length,required=rows.filter(r=>r.field.required&&(!r.select.value||!values[r.select.value])).length,missing=snapshot.coverage.reduce((n,c)=>n+c.missing,0);$('summary').textContent=`${snapshot.adapter||'通用识别'} · ${rows.length} 个字段 · 有资料 ${matched} · 必填缺漏 ${required} · 待补经历 ${missing}`;}

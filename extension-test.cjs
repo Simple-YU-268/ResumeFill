@@ -28,6 +28,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await options.locator('#demoAdapters').click();await options.locator('#saveAdapters').click();await options.locator('#status').filter({hasText:'站点规则已保存'}).waitFor();
   const target=await context.newPage();await target.goto(`http://127.0.0.1:${server.address().port}/demo-advanced.html`);
   const popup=await context.newPage();await popup.goto(`chrome-extension://${id}/popup.html`);
+  // Advanced tools are grouped in a collapsed section in the 0.16 UI; open once for real clicks.
+  await popup.locator('#agentTools').evaluate(el=>{el.open=true;});
   // A real toolbar popup retains the originating active tab. Opening its HTML as a
   // test tab does not; provide only that browser query result through the test tab.
   const tabs=await options.evaluate(()=>chrome.tabs.query({}));const tab=tabs.find(t=>t.url?.startsWith('http://127.0.0.1:'));
@@ -59,6 +61,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await options.evaluate(async()=>{const {resume}=await chrome.storage.local.get('resume');resume.basics.gender='';await chrome.storage.local.set({resume});});
   await popup.locator('#scan').click();await popup.locator('#summary').filter({hasText:'17 个字段'}).waitFor();
   assert.equal(await popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true}).inputValue(),'basics.gender');
+  // 0.16 UX: options show human labels with the raw path on the secondary title; unresolved rows sort first.
+  assert.equal(await popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true}).locator('option[value="basics.gender"]').innerText(),'基本信息 · 性别');
+  assert.ok((await popup.locator('#fields .row').first().innerText()).includes('性别'),'unresolved field must sort to the top');
   await popup.getByRole('textbox',{name:'性别 补充资料',exact:true}).fill('女');await popup.locator('#saveAnswers').click();await popup.locator('#status').filter({hasText:'补充资料保存到简历 JSON'}).waitFor();
   const fixed=await options.evaluate(async()=>(await chrome.storage.local.get('resume')).resume);assert.equal(fixed.basics.gender,'女');assert.equal(fixed.fieldAnswers.length,1);
   await target.evaluate(()=>{const wrap=document.createElement('div');wrap.className='form-row';wrap.innerHTML='<label for="identity">身份证号码</label><input id="identity"><label for="new-answer">校内特殊荣誉</label><input id="new-answer">';document.querySelector('#basics').append(wrap);});
