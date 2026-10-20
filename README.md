@@ -1,6 +1,6 @@
 # ResumeFill Agent
 
-本地优先的简历填表专用 Agent，包含 Windows 桌面管理端与 Chrome / Edge 扩展。当前版本 **0.17.0**，MIT 开源。
+本地优先的简历填表专用 Agent，包含 Windows 桌面管理端与 Chrome / Edge 扩展。当前版本 **0.18.0**，MIT 开源。
 
 ## 使用
 

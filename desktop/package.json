@@ -1,6 +1,6 @@
 {
   "name": "resumefill-desktop",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "ResumeFill dedicated application agent",
   "author": "ResumeFill",
   "main": "main.cjs",
@@ -20,6 +20,14 @@
   "build": {
     "appId": "local.resumefill.agent",
     "productName": "ResumeFill Agent",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Simple-YU-268",
+        "repo": "ResumeFill",
+        "releaseType": "release"
+      }
+    ],
     "directories": {
       "output": "../dist/desktop"
     },
@@ -56,6 +64,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "0.1.80",
+    "electron-updater": "6.6.2",
     "pdf-parse": "2.4.5",
     "tesseract.js": "7.0.0"
   },

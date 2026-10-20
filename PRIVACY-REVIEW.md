@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.16.0 on 2026-10-19. Earlier review: v0.12.0.
+Reviewed for v0.18.0 on 2026-10-20. Earlier review: v0.12.0.
 
 The development workspace contains private files. This review applies only to the Git publication inventory and freshly built release runtime, not to every file elsewhere on the machine.
 
@@ -16,6 +16,7 @@ The development workspace contains private files. This review applies only to th
 - The desktop encrypts the gateway token and provider API key at rest with Electron safeStorage (DPAPI on Windows). Plaintext configurations are migrated on first launch. A configuration sealed on another machine fails closed rather than decrypting silently.
 - Connection files contain only a one-time pairing code, valid for 10 minutes and invalidated after redemption or a newer export. The long-lived token stays in the gateway process and the extension session store; it is never written by the extension or included in exported files.
 - The loopback gateway rejects desktop, Agent, webpage-OCR and pairing requests without an extension Origin, and records desktop sync actions in a bounded in-memory audit (no profile values are logged).
+- Update checks (0.18.0) contact only the GitHub API and release asset CDN for this repository; they carry no personal data, profile content or credentials. Startup checks can be disabled in the UI, downloads start only on explicit request, and installation requires a separate click.
 - Model provider keys continue to reside only in the desktop configuration and are never imported into the extension.
 
 ## Checks
