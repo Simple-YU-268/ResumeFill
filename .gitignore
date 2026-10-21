@@ -35,3 +35,7 @@ desktop/ui/regions.js
 desktop/ui/theme.css
 desktop/ui/visual.js
 desktop/ui/buddy.svg
+
+# Reviewed synthetic product screenshots only; all other raster images stay private.
+!docs/images/desktop-overview.png
+!docs/images/profile-editor.png
