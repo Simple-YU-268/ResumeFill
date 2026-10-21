@@ -1,6 +1,6 @@
 # ResumeFill Agent
 
-本地优先的简历填表专用 Agent，包含 Windows 桌面管理端与 Chrome / Edge 扩展。当前版本 **0.20.3**，MIT 开源。
+本地优先的简历填表专用 Agent，包含 Windows 桌面管理端与 Chrome / Edge 扩展。当前版本 **0.20.4**，MIT 开源。
 
 ## 使用
 
@@ -85,6 +85,6 @@ npm run build
 
 可复现接入验证：`node scripts/verify-ai-browser.cjs --mock` 使用本机模拟模型；`--live` 显式读取桌面端已保存的服务配置并调用真实模型（可能消耗少量额度）。可用 RF_MODEL_CONFIG 指定配置文件；测试仅使用合成资料，真实密钥留在网关进程中，报告写入 dist/ai-live-verification.json。2026-10-19 使用 OpenRouter qwen/qwen3.8-flash 验证了三种页面叫法的语义映射和实际填写回读，建议阶段约 10.8 秒；该数值不是延迟保证。
 
-当前 51job 页面兼容说明（0.20.3）：识别基本信息、最高学历、外语水平、IT 技能、在校荣誉、学生实践经验和其他信息。`languages` 可保存 `{language, level, score}`，`skills` 可保留原来的文本或使用 `{name, level}` 数组，`awards` 可使用 `{name, date, description}` 数组，`activities` 可使用 `{organization, department, position, startDate, endDate, description, honors}` 数组。新规则不会自动迁移或拆分旧资料。单个编辑器面对多个本地记录时需人工选择明确区块；最高学历按唯一最高层次选择，英语按明确语言标识定位。
+当前 51job 页面兼容说明（0.20.4）：识别基本信息、最高学历、外语水平、IT 技能、在校荣誉、学生实践经验和其他信息。`languages` 可保存 `{language, level, score}`，`skills` 可保留原来的文本或使用 `{name, level}` 数组，`awards` 可使用 `{name, date, description}` 数组，`activities` 可使用 `{organization, department, position, startDate, endDate, description, honors}` 数组。新规则不会自动迁移或拆分旧资料。单个编辑器面对多个本地记录时需人工选择明确区块；最高学历按唯一最高层次选择，英语按明确语言标识定位。
 
 当前页面的多级引用选择器（英语、城市、技能等）支持自动逐级选择真实条目：先遍历所属菜单确认路径唯一，再选择末级并重新打开检查选中路径与回显。英语需要对应等级与分数，技能支持 category，地区优先使用规范化省市区；重名、缺失分数、区间重叠、超限或不完整列表转为人工选择。歧义候选显示完整路径，可由用户确认后按站点记住。Element 的按日日期框要求完整年月日，仅有年月时提示补充精度，不虚构日期。亲属关系、接受其他公司邀约、信息来源等无资料的问题继续使用网站补充答案机制。

@@ -56,7 +56,7 @@
     return [...new Set(parts.map(normalize).filter(Boolean))];
   }
   const foreignPerson=f=>/父亲|母亲|配偶|紧急联系人|家庭成员|推荐人|联系人姓名|联系人电话|联系人手机|推荐者|监护人|emergencycontact|referencecontact/i.test(normalize(f.label)+' '+normalize(f.context));
-  const protectedLabel=f=>/验证码|校验码|密码|一次性.*码|captcha|password|verification.?code|\botp\b/i.test(f.label||'');
+  const protectedLabel=f=>/验证码|校验码|密码|安全问题|密保|问题[一二三123]答案|security.?question|security.?answer|recovery.?answer|一次性.*码|captcha|password|verification.?code|\botp\b/i.test(f.label||'');
   function namesFor(path){
     if(path.endsWith('.startDate'))return aliases['*.startDate'];
     if(path.endsWith('.endDate'))return aliases['*.endDate'];

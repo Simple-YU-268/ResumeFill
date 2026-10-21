@@ -9,7 +9,7 @@ class AgentEngine{
   const fields=o.fields.map(f=>{if(!f||typeof f.id!=='string'||typeof f.stableId!=='string'||typeof f.label!=='string')throw Error('字段身份无效');return {id:f.id,stableId:f.stableId,label:f.label.slice(0,200),section:f.section||null,recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,type:f.type||'input',required:!!f.required,ambiguousLabel:!!f.ambiguousLabel};});
   if(new Set(fields.map(f=>f.id)).size!==fields.length||new Set(fields.map(f=>f.stableId)).size!==fields.length)throw Error('重复字段身份');
   const paths=[...new Set(o.candidatePaths)];if(paths.some(p=>typeof p!=='string'||p.length>200||p.split('.').some(s=>['__proto__','prototype','constructor'].includes(s))))throw Error('资料路径无效');
-  const bound=new Set(),bindings=o.bindings.map(b=>{const f=fields.find(f=>f.id===b.id);if(!f||!paths.includes(b.path)||bound.has(b.id)||/密码|验证码|captcha|password|\botp\b/i.test(f.label))throw Error('未授权或受保护字段');bound.add(b.id);return {id:b.id,path:b.path,stableId:f.stableId,signature:JSON.stringify([f.label,f.section,f.recordIndex,f.type])};});
+  const bound=new Set(),bindings=o.bindings.map(b=>{const f=fields.find(f=>f.id===b.id);if(!f||!paths.includes(b.path)||bound.has(b.id)||AI.protectedField(f))throw Error('未授权或受保护字段');bound.add(b.id);return {id:b.id,path:b.path,stableId:f.stableId,signature:JSON.stringify([f.label,f.section,f.recordIndex,f.type])};});
   return {pageKey:o.pageKey,fields,candidatePaths:paths,bindings};
  }
  get(id){const s=this.sessions.get(id);if(!s||this.now()-s.updatedAt>1800000){this.sessions.delete(id);throw Error('Agent 会话已过期，请重新启动');}return s;}
