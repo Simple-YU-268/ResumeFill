@@ -2,7 +2,7 @@
 
 少填一点，多一点可能。ResumeFill 是本地优先的简历填表 Agent，包含 Windows 桌面端和 Chrome / Edge 扩展。
 
-**当前版本：0.22.0** · [下载发行版](https://github.com/Simple-YU-268/ResumeFill/releases/latest) · [项目主页](https://github.com/Simple-YU-268/ResumeFill)
+**当前版本：0.23.0** · [下载发行版](https://github.com/Simple-YU-268/ResumeFill/releases/latest) · [项目主页](https://github.com/Simple-YU-268/ResumeFill)
 
 ## 从这里开始
 
@@ -17,9 +17,9 @@
 - [常见问题](Troubleshooting.md)：连接、扫描、下拉和模型错误。
 - [开发与发行](Development-and-Releases.md)：源码、验证、构建和发布规则。
 
-## 0.22.0 的变化
+## 0.23.0 的变化
 
-桌面端和插件统一为简洁插画风格，使用文档小搭档、圆润按钮与三步入口。近期版本还加入了手动表单学习、同源嵌入式表单支持、复杂多级选择器及桌面自动配对。
+桌面端保存的资料与插件现有资料之间，现在会显示差异提示；可核对并逐项同步，保留插件独有内容和网站学习答案。已有值、敏感项与整组经历不会自动覆盖。同步后重新扫描网页使用新资料。
 
 软件不会自动提交申请。复杂网站仍可能需要人工处理；AI 建议和网页回读均需核对。
 
