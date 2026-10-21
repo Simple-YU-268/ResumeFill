@@ -13,7 +13,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
  const cache=new Map(),ttl=config.cacheTtlMs??300000,maxCache=config.maxCacheEntries??128,timeout=config.timeoutMs??20000;let active=0,pairFails=[];
  if(!Number.isFinite(ttl)||ttl<0||ttl>3600000||!Number.isInteger(maxCache)||maxCache<0||maxCache>512||!Number.isInteger(timeout)||timeout<100||timeout>22000)throw Error('缓存或超时设置无效');
  const originAllowed=o=>!o||/^chrome-extension:\/\/[a-p]{32}$/.test(o)&&(!allowed.length||allowed.includes(o.split('://')[1]));
- const auth=req=>{const provided=String(req.headers.authorization||''),expected='Bearer '+config.token;const a=Buffer.from(provided),b=Buffer.from(expected);return a.length===b.length&&crypto.timingSafeEqual(a,b);};
+ const auth=req=>{const provided=String(req.headers.authorization||''),expected='Bearer '+config.token;const a=Buffer.from(provided),b=Buffer.from(expected);return a.length===b.length&&crypto.timingSafeEqual(a,b)||typeof config.sessionAuth==='function'&&provided.startsWith('Bearer ')&&config.sessionAuth(provided.slice(7),req.headers.origin)===true;};
  const send=(res,status,data)=>{if(res.destroyed||res.writableEnded)return;res.writeHead(status,{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
  async function body(req,limit=200000){return await new Promise((resolve,reject)=>{let data='',bytes=0;req.setEncoding('utf8');req.on('data',chunk=>{bytes+=Buffer.byteLength(chunk);if(bytes>limit){data='';reject(fail('请求过大',413,'RF_BODY_TOO_LARGE'));return;}data+=chunk;});req.on('end',()=>{try{resolve(JSON.parse(data));}catch{reject(fail('请求不是有效 JSON',400,'RF_JSON_INVALID'));}});req.on('error',reject);});}
  function fieldPacket(p){if(!p||p.version!==1||!Array.isArray(p.fields)||!Array.isArray(p.candidates))throw fail('字段请求结构无效',400,'RF_PACKET_INVALID');const values=Object.fromEntries(p.candidates.map(c=>[c.path,p.shareValues?c.value:'present']));AI.validatePacket(p,values);if(p.candidates.some(c=>!/^([\w\u4e00-\u9fff-]+\.)*[\w\u4e00-\u9fff-]+$/.test(c.path)||c.path.split('.').some(s=>['__proto__','constructor','prototype'].includes(s))))throw fail('候选路径无效',400,'RF_PACKET_INVALID');return p;}
@@ -32,8 +32,13 @@ function createGateway(config,{fetchImpl=fetch}={}){
   const origin=req.headers.origin;if(!originAllowed(origin)){send(res,403,{error:'Origin 不允许',code:'RF_ORIGIN_FORBIDDEN'});return;}
   if(origin){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');}
   if(req.method==='OPTIONS'){res.writeHead(204,{'Access-Control-Allow-Methods':'POST, GET, OPTIONS','Access-Control-Allow-Headers':'Authorization, Content-Type'});res.end();return;}
-  const sensitive=/^\/v1\/(?:desktop|agent|ocr)\//.test(req.url||'')||req.url==='/v1/pair';
+  const sensitive=/^\/v1\/(?:desktop|agent|ocr|pair)\//.test(req.url||'')||req.url==='/v1/pair'||req.url==='/v1/discovery';
   if(sensitive&&!origin){send(res,403,{error:'敏感操作仅接受浏览器扩展请求',code:'RF_ORIGIN_REQUIRED'});return;}
+  if(['GET','POST'].includes(req.method)&&req.url==='/v1/discovery'&&typeof config.pairing?.automatic==='function'){try{if(req.method==='POST'){if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))throw fail('仅接受 application/json',415,'RF_CONTENT_TYPE');await body(req,2000);}send(res,200,{identity:'ResumeFillAgent',version,autoPair:true});}catch(e){send(res,e.status||400,{error:e.message,code:e.code||'RF_PAIR_INVALID'});}return;}
+  if(req.method==='POST'&&req.url==='/v1/pair/auto'&&typeof config.pairing?.automatic==='function'){
+   if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){send(res,415,{error:'仅接受 application/json',code:'RF_CONTENT_TYPE'});return;}
+   try{const result=await config.pairing.automatic(await body(req,2000),origin);send(res,result.status,result.data);}catch(e){send(res,e.status||400,{error:e.message,code:e.code||'RF_PAIR_FAILED'});}return;
+  }
   if(req.method==='POST'&&req.url==='/v1/pair'){
    if(typeof config.pairing?.redeem!=='function'){send(res,404,{error:'接口不存在',code:'RF_NOT_FOUND'});return;}
    pairFails=pairFails.filter(t=>Date.now()-t<60000);if(pairFails.length>=5){send(res,429,{error:'配对尝试过多，请一分钟后再试',code:'RF_PAIR_RATE_LIMITED'});return;}
@@ -41,7 +46,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
    return;
   }
   if(!auth(req)){send(res,401,{error:'本地访问令牌无效',code:'RF_UNAUTHORIZED'});return;}
-  if(req.method==='GET'&&req.url==='/health'){send(res,200,{ok:true,version,identity:'ResumeFillAgent',engine:upstream?'upstream':'local-rules',active,cacheEntries:cache.size});return;}
+  if(['GET','POST'].includes(req.method)&&req.url==='/health'){try{if(req.method==='POST')await body(req,2000);send(res,200,{ok:true,version,identity:'ResumeFillAgent',engine:upstream?'upstream':'local-rules',active,cacheEntries:cache.size});}catch(e){send(res,e.status||400,{error:e.message,code:e.code||'RF_JSON_INVALID'});}return;}
   const agentAction=req.url?.match(/^\/v1\/agent\/(start|result|error|resume|cancel|status)$/)?.[1];
   const desktopAction=config.desktopHandler&&req.url?.match(/^\/v1\/desktop\/(heartbeat|pull|push)$/)?.[1];
   const webOCR=req.url==='/v1/ocr/web'&&typeof config.webOCR==='function';

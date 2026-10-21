@@ -20,13 +20,12 @@
     try{resume=(await request('RF_ASSIST_DATA')).resume;}catch{hide();return;}
     if(rev!==version||active!==el)return;
     const values=ResumeMatcher.flatten(resume),known=ResumeAnswers.match(field,resume,page())||ResumeMatcher.match(field,values)||ResumeMatcher.infer(field);
-    const query=el.value.trim().toLowerCase(),candidates=[];
-    if(known?.path&&values[known.path])candidates.push(known.path);
-    if(query&&!known)for(const [path,value] of Object.entries(values))if(!candidates.includes(path)&&value&&(value.toLowerCase().includes(query)||path.toLowerCase().includes(query))&&!path.startsWith('fieldAnswers.'))candidates.push(path);
+    const query=el.value.trim().toLowerCase(),candidates=ResumeMatcher.suggestions(field,values,query);
+    if(known?.path&&values[known.path]&&!candidates.some(c=>c.path===known.path))candidates.unshift({path:known.path,reason:'已保存的本页答案',confirmed:true});
     panel.replaceChildren();const title=document.createElement('p');title.textContent='简历快填 · '+field.label;panel.append(title);
-    for(const path of candidates.slice(0,6))button(path+'：'+values[path],async()=>{
+    for(const {path,reason,confirmed} of candidates.slice(0,6))button((confirmed?'':reason+' · ')+path+'：'+values[path],async()=>{
       if(!el.isConnected)throw Error('输入框已变化，请重新选择');
-      const result=await ResumeFillPage.fill(el,values[path]);if(result.status!=='verified')throw Error(result.error||'回读未通过');hide();
+      const result=await ResumeFillPage.fill(el,values[path],ResumeMatcher.referenceData(path,values));if(result.status!=='verified')throw Error(result.error||'回读未通过');hide();
     });
     if(!candidates.length){const hint=document.createElement('small');hint.textContent=known?`已识别 ${known.path}，请在网页输入后保存。`:'暂无匹配；在网页输入答案后可保存为新资料。';panel.append(hint);}
     if(query&&(!known||!values[known.path])){

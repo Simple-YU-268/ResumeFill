@@ -26,4 +26,11 @@ const forged=structuredClone(p);forged.fields[0].candidatePaths.push('projects.1
 assert.equal(AI.normalizeKey('  Bearer synthetic-key\n'),'synthetic-key');assert.throws(()=>AI.normalizeKey('bad key'),/空格/);
 assert.match(AI.httpError(401,'https://openrouter.ai/api/v1/chat/completions'),/openrouter.ai.*鉴权/);
 assert.ok(!AI.httpError(401,'https://example.invalid/path?secret=hidden').includes('hidden'));
-console.log('PASS: numeric units/open bounds/overlap, salary period isolation, model candidate minimization and per-field validation, credential normalization');
+const failure=AI.toolFailure(Error('HTTP 401 synthetic-secret'), 'match_fields');assert.equal(failure.code,'RF_AGENT_HTTP_401');assert.ok(!failure.message.includes('synthetic-secret'));assert.match(failure.message,/AI 字段匹配.*401/);
+const highestPacket=AI.build([{id:'highest',label:'毕业学校',section:'education',recordPolicy:'highestEducation'}],{'education.0.degree':'本科','education.0.school':'A','education.1.degree':'硕士','education.1.school':'B'});assert.equal(highestPacket.fields[0].recordIndex,1);assert.deepEqual(highestPacket.candidates.map(c=>c.path),['education.1.school']);
+const practicePacket=AI.build([{id:'practice',label:'项目描述',section:'activities',recordPolicy:'uniqueRecord'}],{'activities.0.description':'Synthetic practice','projects.0.description':'Unrelated project','work.0.description':'Unrelated work'});
+assert.deepEqual(practicePacket.candidates.map(c=>c.path),['activities.0.description']);assert.equal(practicePacket.fields[0].recordIndex,0);
+const injectedPractice={fields:[{id:'practice',label:'项目描述',section:'activities',recordIndex:0}],candidates:[{path:'projects.0.description'},{path:'activities.1.description'}]};
+assert.equal(AI.parseResponse({matches:[{fieldId:'practice',path:'projects.0.description',confidence:.99}]},injectedPractice).accepted.length,0);
+assert.equal(AI.parseResponse({matches:[{fieldId:'practice',path:'activities.1.description',confidence:.99}]},injectedPractice).accepted.length,0);
+console.log('PASS: numeric units/open bounds/overlap, salary period isolation, model candidate minimization and per-field validation, credential normalization; practice section/record isolation');

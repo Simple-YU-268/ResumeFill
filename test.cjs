@@ -16,6 +16,22 @@ assert.equal(M.match({label:'city-field_anld7OmP',tokens:['city']},{'basics.city
 assert.equal(M.match({label:'父亲姓名',tokens:['name']},{'basics.name':'本人'}),null);
 assert.equal(M.infer({label:'户籍所在地 · 市',regionRole:'hukou',regionLevel:'city'}).path,'basics.hukou.city');
 assert.equal(M.match({tokens:['期望薪资'],context:''},M.flatten({custom:{期望薪资:'10000'}})).path,'custom.期望薪资');
+const smart=M.flatten({basics:{name:'Synthetic',email:'test@example.invalid',phone:'123'},education:[{school:'School A'},{school:'School B'}],work:[{company:'Company A',description:'Task A'},{company:'Company B',description:'Task B'}],custom:{到岗周期:'两周'}});
+for(const label of ['请填写您的姓名（必填）','姓名 (Full Name)','电子邮件（Email Address）','常用邮箱'])assert.equal(M.match({label},smart)?.path,/姓名/.test(label)?'basics.name':'basics.email');
+assert.equal(M.match({label:'任职单位',section:'work',recordIndex:1},smart)?.path,'work.1.company');
+assert.equal(M.match({label:'岗位职责',section:'work',recordIndex:0},smart)?.path,'work.0.description');
+assert.equal(M.match({label:'请填写到岗周期（选填）'},smart)?.path,'custom.到岗周期');
+assert.equal(M.match({label:'就读院校',section:'education',recordIndex:1},smart)?.path,'education.1.school');
+assert.equal(M.match({label:'姓名（电子邮箱）'},smart),null);
+for(const field of [{label:'紧急联系人手机号码'},{label:'手机号码',context:'家庭成员'},{label:'一次性验证码'}]){assert.equal(M.match(field,smart),null);assert.ok(!M.suggestions(field,smart,'123').some(c=>c.path.startsWith('basics.')));}
+assert.deepEqual(M.suggestions({label:'工作任务',section:'work',recordIndex:1},smart,'Task').map(c=>c.path).sort(),['work.1.company','work.1.description']);
+assert.ok(M.candidatePaths({label:'请填写到岗周期（选填）'},smart).includes('custom.到岗周期'));
+const highest=M.flatten({education:[{degree:'本科',school:'Bachelor school'},{degree:'硕士',school:'Master school',courses:['Course A','Course B']}]});
+assert.equal(M.match({label:'毕业学校',recordPolicy:'highestEducation'},highest)?.path,'education.1.school');
+assert.equal(M.match({label:'主修课程',recordPolicy:'highestEducation'},highest)?.path,'education.1.courses');assert.equal(highest['education.1.courses'],'Course A、Course B');
+assert.deepEqual(M.candidatePaths({label:'毕业学校',recordPolicy:'highestEducation'},highest),['education.1.school']);
+assert.equal(M.match({label:'其他学校',recordPolicy:'highestEducation'},highest),null);assert.deepEqual(M.candidatePaths({label:'其他专业',recordPolicy:'highestEducation'},highest),[]);
+for(const education of [[{degree:'硕士',school:'A'},{degree:'硕士',school:'B'}],[{school:'A'},{degree:'本科',school:'B'}]])assert.equal(M.match({label:'毕业学校',recordPolicy:'highestEducation'},M.flatten({education})),null);
 const adapters=JSON.parse(fs.readFileSync(__dirname+'/sample-adapters.json','utf8'));A.validate(adapters);
 assert.equal(A.choose(adapters,'http://127.0.0.1:8888/demo-advanced.html').id,'local-advanced-demo');
 assert.equal(A.choose(adapters,'http://127.0.0.1:8888/other'),null);

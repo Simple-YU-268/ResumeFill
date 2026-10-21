@@ -1,6 +1,45 @@
 # Changelog
 
+## 0.20.3 — 2026-10-21
+
+- 支持 51job 特殊多级引用选择器：限定触发器所属浮层，悬停展开异步子级，遍历后只点击唯一末级；支持显式分类、省市区和城市级控件。
+- 英语等级结合本条语言记录的分数选择区间；分数缺失、重复末级、区间边界重叠或遍历不完整时停止。
+- 重新打开菜单校验真实 active 路径与文本回显；保留已有值，支持取消与完整路径人工确认/记忆。
+- 弹窗、单项重试、内联建议与 Agent 共用本地辅助资料；逐项回读避免多个浮层并发互相影响。
+
+## 0.20.2
+
+- 根据实际 51job 页面检查七个模块，新增基本信息、语言、技能、荣誉与实践区块语义；隔离同名字段，歧义多条记录不取第一条。
+- 补齐目前居住地、通信地址、期望工作地、专用紧急联系人资料的匹配；英语等级与分数独立对应，支持结构化 languages / skills / awards / activities 数据。
+- 识别 CSS 必填标记与 Element 日期精度；多级引用选择器禁止以文本写入冒充成功，当前需人工选择真实条目。
+- 扩充真实页面匿名化回归：43 字段、填写回读、重复记录、跨区块 AI 拒绝、日期与引用控件。
+
+## 0.20.1
+
+- 修复 51job 最高学历区块识别，按唯一最高学历选择教育记录，支持毕业学校、学历层次与课程数组。
+- 其他学校/专业保持人工核对；学历未知或并列时不自动选择。
+- Agent 显示失败工具和安全错误码；保留上游 HTTP 状态，支持失败后继续。
+- 增加真实 Edge 十字段扫描、两步失败和模型恢复回归。
+
+## 0.20.0 — 2026-10-20
+
+- Desktop auto-discovery and pairing: bounded loopback discovery, first-use approval on the desktop, persistent per-browser grants and session-token renewal after browser/desktop restarts. The desktop lists pending/approved clients with approve, reject and revoke controls; rejected requests pause, expire and are bounded. Session tokens are derived for the approved extension Origin/client, differ from the gateway master token and stop working immediately when revoked. Discovery exposes no profile or token.
+- Plugin popup/options automatically reconnect with existing local permission, offer one-click discovery and retain manual pairing. First-time setup imports desktop data only if no browser profile exists. Existing data, unsaved JSON/AI settings and separate cloud-provider keys remain intact. Agent, desktop sync and web OCR share the desktop connection independently of cloud AI configuration. Busy default ports fall back within 17322–17324. Real installed-extension and backend regressions cover discovery, approval, session renewal, origin isolation, profile/key preservation and revocation.
+
+## 0.19.1 — 2026-10-20
+
+- Block browser internal pages and Chrome/Edge extension galleries before attempting injection, with an actionable Chinese message. Failed scans clear stale field mappings; fill/prepare verify the active tab before acting. Late gallery access errors are translated without requesting broader browser permissions. Installed-extension regressions cover restricted URLs, empty tabs, late injection failure, recovery and wrong-tab fill prevention.
+
+## 0.19.0 — 2026-10-20
+
+- Windows desktop: adds “一键更新并重启” to check GitHub Releases, download the verified update, stop the local service and request silent installation with relaunch. Concurrent clicks share one job; no update means no download or restart. Unsaved profile/model edits and active PDF/Agent tasks block installation. The staged update controls remain available. Update state and renderer tests cover the flow with simulated transport/installation; a real installed upgrade remains an interactive verification step.
+- Includes proactive AI and improved matching documented below. After desktop updates, reload the unpacked Chrome/Edge extension to activate its new code.
+
 ## Unreleased — engineering
+
+- Proactive AI: configured models automatically analyze unresolved fields after scanning and add validated suggestions to the review preview. Local results remain usable during inference. Automatic requests omit resume values, respect manual edits and record boundaries, reuse unchanged suggestions within the popup session, and cancel on rescans/fill/Agent start. A persisted switch disables automatic requests; failures leave local matching available. Installed-extension regression covers automatic requests, preview-only behavior, minimization, caching, edits, 401 fallback and opt-out.
+
+- New-field matching: normalize polite prompts, required markers and bilingual labels; expand school, employer, duty and project-description aliases. Local and AI candidate selection now share custom-key/date aliases. Inline suggestions show relevant local paths before typing and constrain typed-value search to the current record. Relative/emergency-contact fields cannot reuse the candidate's basic information. Repeated plain containers with two distinct labelled fields are recognized as separate records, including cards inserted after scanning; date-range rows remain one record. Browser regressions cover dynamic cards and verified fills.
 
 - CI now runs every automated suite: desktop extension sync, Electron UI profile editing, PDF import flow and the version consistency check (scripts/check-version.cjs asserts package.json, desktop/package.json and manifest.json stay aligned). New npm scripts: test:desktop, test:electron, test:all, version:check.
 - The installer build workflow also uploads latest.yml and the NSIS blockmap, so CI-built releases can feed in-app updates.

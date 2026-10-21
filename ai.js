@@ -11,6 +11,14 @@
     if(status===404)return 'HTTP 404：请核对完整 Chat Completions 接口路径和模型 ID';
     return 'HTTP '+status+'：请检查服务配置或稍后重试';
   }
+  function toolFailure(error,tool){
+    const labels={match_fields:'AI 字段匹配',observe_page:'页面扫描',verify_fields:'字段回读',fill_fields:'字段填写'},text=String(error?.message||''),known=String(error?.code||'');
+    const http=Number(known.match(/^RF_AGENT_HTTP_(\d{3})$/)?.[1]||text.match(/HTTP\s+(\d{3})/i)?.[1]);
+    if([401,402,403,404,429,500,502,503,504].includes(http))return {code:'RF_AGENT_HTTP_'+http,message:(labels[tool]||'工具')+'失败：'+httpError(http)};
+    const code=/^RF_AGENT_(TIMEOUT|PAGE_CHANGED|CANDIDATES|CONNECTION)$/.test(known)?known:/超时|取消|AbortError/.test(text+' '+error?.name)?'RF_AGENT_TIMEOUT':/页面.*变|字段.*变|已失效|控件/.test(text)?'RF_AGENT_PAGE_CHANGED':/候选|JSON|协议|校验/.test(text)?'RF_AGENT_CANDIDATES':'RF_AGENT_CONNECTION';
+    const reasons={RF_AGENT_TIMEOUT:'请求超时或取消，请重试；模型请求最多等待 25 秒',RF_AGENT_PAGE_CHANGED:'页面或字段已变化，请重新扫描后继续',RF_AGENT_CANDIDATES:'候选资料或模型响应未通过校验，请检查资料和模型兼容性',RF_AGENT_CONNECTION:'服务连接或工具调用失败，请检查桌面连接与“保存并测试模型”结果'};
+    return {code,message:(labels[tool]||'工具')+'失败：'+reasons[code]};
+  }
   function settings(data){
     if(!data?.enabled)return {enabled:false};
     const url=new URL(String(data.endpoint||''));
@@ -25,7 +33,7 @@
     return {enabled:true,endpoint:url.href,model:String(data.model).trim(),jsonMode:!!data.jsonMode,originPattern:url.protocol+'//'+url.hostname+'/*'};
   }
   function build(fields,values,{shareValues=false,page}={}){
-    const chosen=fields.filter(f=>!protectedField(f)&&!f.verified&&!f.resolved).map(f=>({...f,candidatePaths:matcher().candidatePaths(f,values)})).filter(f=>f.candidatePaths.length);
+    const chosen=fields.filter(f=>!protectedField(f)&&!f.verified&&!f.resolved).map(f=>matcher().resolveField(f,values)).filter(Boolean).map(f=>({...f,candidatePaths:matcher().candidatePaths(f,values)})).filter(f=>f.candidatePaths.length);
     if(chosen.length>100)throw Error('每次 AI 匹配最多 100 个字段，请分批处理');
     const necessary=new Set(chosen.flatMap(f=>f.candidatePaths));
     const candidates=Object.entries(values).filter(([p])=>necessary.has(p)).map(([path,value])=>shareValues?{path,value:String(value).slice(0,1200)}:{path});
@@ -52,8 +60,8 @@
     for(const m of data.matches){
       if(!m||!fields.has(m.fieldId)||!paths.has(m.path)||seen.has(m.fieldId)||typeof m.confidence!=='number'||!Number.isFinite(m.confidence)||m.confidence<0||m.confidence>1)throw Error('AI 返回未知字段、重复匹配或简历之外的路径，已拒绝应用');
       seen.add(m.fieldId);const f=fields.get(m.fieldId);
-      const wrongRecord=Number.isInteger(f.recordIndex)&&['education','work','projects'].includes(f.section)&&!m.path.startsWith(f.section+'.'+f.recordIndex+'.');
-      const wrongSection=f.section&&['basics','education','work','projects'].includes(f.section)&&!m.path.startsWith(f.section+'.');
+      const wrongRecord=Number.isInteger(f.recordIndex)&&matcher().recordSections.includes(f.section)&&!m.path.startsWith(f.section+'.'+f.recordIndex+'.');
+      const wrongSection=f.section&&['basics',...matcher().recordSections].includes(f.section)&&!m.path.startsWith(f.section+'.');
       const match={fieldId:m.fieldId,path:m.path,confidence:m.confidence,reason:typeof m.reason==='string'?m.reason.slice(0,240):''};
       const outside=f.candidatePaths&&!f.candidatePaths.includes(m.path);
       if(outside||wrongRecord||wrongSection||m.confidence<0.85)rejected.push({...match,error:outside?'不在该字段的候选范围内':wrongRecord||wrongSection?'经历或模块不一致':'置信度不足 0.85'});else accepted.push(match);
@@ -65,6 +73,6 @@
     return ((host==='api.deepseek.com'&&['deepseek-flash','deepseek-v4-pro'].includes(config.model))||(['api.moonshot.cn','api.moonshot.ai'].includes(host)&&config.model==='kimi-k2.6'))?{thinking:{type:'disabled'}}:{};
   }
   function requestBody(config,packet){return {...requestOptions(config),model:config.model,messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify(packet)}],stream:false,...config.jsonMode?{response_format:{type:'json_object'}}:{}};}
-  root.ResumeAI={settings,build,validatePacket,parseResponse,requestBody,requestOptions,protectedField,normalizeKey,httpError};
+  root.ResumeAI={settings,build,validatePacket,parseResponse,requestBody,requestOptions,protectedField,normalizeKey,httpError,toolFailure};
   if(typeof module!=='undefined')module.exports=root.ResumeAI;
 })(globalThis);

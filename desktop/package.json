@@ -1,6 +1,6 @@
 {
   "name": "resumefill-desktop",
-  "version": "0.18.0",
+  "version": "0.20.3",
   "description": "ResumeFill dedicated application agent",
   "author": "ResumeFill",
   "main": "main.cjs",
@@ -8,7 +8,7 @@
     "start": "electron .",
     "prepare:resources": "node prepare.cjs",
     "dist": "npm run prepare:resources && electron-builder --win nsis --x64",
-    "test": "node test.cjs && node model-test.cjs"
+    "test": "node test.cjs && node pairing-test.cjs && node model-test.cjs && node updater-test.cjs && node updater-renderer-test.cjs"
   },
   "devDependencies": {
     "@tesseract.js-data/chi_sim": "1.0.0",
@@ -33,8 +33,10 @@
     },
     "files": [
       "main.cjs",
+      "updater.cjs",
       "preload.cjs",
       "controller.cjs",
+      "pairing.cjs",
       "ui/**/*",
       "pdf-service.cjs",
       "pdf-worker.cjs",

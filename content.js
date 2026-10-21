@@ -42,7 +42,8 @@
     for(let node=el.parentElement;node&&node!==document.body;node=node.parentElement){
       const title=moduleTitle(node);
       if(node.matches(cardSelector)&&!node.hasAttribute('data-resume-section'))continue;
-      const detected=node.getAttribute('data-resume-section')||(/教育|学历|education/i.test(title)?'education':/工作经历|实习经历|work experience|^(工作|实习|work|employment)$/i.test(title)?'work':/项目经历|项目经验|科研经历|project experience|projects/i.test(title)?'projects':null);
+      const detected=node.getAttribute('data-resume-section')||(/基本信息/.test(title)?'basics':/外语水平|语言能力/.test(title)?'languages':/IT技能|专业技能/.test(title)?'skills':/在校荣誉|获奖经历/.test(title)?'awards':/学生实践经验|社会实践/.test(title)?'activities':/教育|学历|education/i.test(title)?'education':/工作经历|实习经历|work experience|^(工作|实习|work|employment)$/i.test(title)?'work':/项目经历|项目经验|科研经历|project experience|projects/i.test(title)?'projects':null);
+      if(title==='其他')return {section:null,recordIndex:null,context:title};
       if(/校内活动|校园经历|社团经历|学生工作/.test(title))return {section:null,recordIndex:null,context:title,contextBlocked:true};
       if(detected){group=node;context=title;section=detected;break;}
     }
@@ -53,13 +54,15 @@
       // Repeated plain DIV cards: require multiple controls and identical field structure,
       // so individual form rows and two date inputs cannot become separate records.
       for(let node=el.parentElement;node&&node!==group;node=node.parentElement){
-        const signature=n=>{const inputs=shown(n,'input,textarea,select').filter(eligible);return inputs.length>=3?inputs.map(c=>c.tagName+':'+(c.type||'')+':'+text(c.labels?.[0])).join('|'):'';};
+        const signature=n=>{const inputs=shown(n,'input,textarea,select').filter(eligible),labels=inputs.map(c=>text(c.labels?.[0])||ResumeLayout.associate(c).label);const distinct=new Set(labels.filter(Boolean));return inputs.length>=3||inputs.length===2&&distinct.size===2?inputs.map((c,i)=>c.tagName+':'+(c.type||'')+':'+labels[i]).join('|'):'';};
         const sig=signature(node);if(!sig)continue;
         const siblings=Array.from(node.parentElement.children).filter(n=>signature(n)===sig);
         if(siblings.length>1){card=node;peers=siblings;}
       }
     }
-    return {section,recordIndex:card&&peers.includes(card)?peers.indexOf(card):group?0:null,context};
+    const highest=section==='education'&&/最高学历|最高教育/.test(context);
+    const single=['languages','skills','awards','activities'].includes(section)&&!card;
+    return {section,recordIndex:highest||single||section==='basics'?null:card&&peers.includes(card)?peers.indexOf(card):group?0:null,context,...highest?{recordPolicy:'highestEducation'}:single?{recordPolicy:'uniqueRecord'}:{}};
   }
   function moduleTitle(node){
     const heading=node.querySelector(':scope > legend,:scope > h2,:scope > h3,:scope > h4,:scope > header > h2');
@@ -68,8 +71,8 @@
     for(const child of node.children){
       if(child.matches('input,textarea,select')||child.querySelector('input,textarea,select'))break;
       if(child.matches('label,button')||!ResumeLayout.visible(child))continue;
-      const title=text(child);
-      if(/^(教育经历|教育背景|工作经历|实习经历|项目经历|项目经验|科研经历|校内活动|校园经历|社团经历|学生工作)(?:\s|$)/.test(title)&&title.length<80)return title;
+      const title=text(child).replace(/内容缺失.*$|编辑$|添加$/g,'').trim();
+      if(/^(基本信息|外语水平|语言能力|IT技能|专业技能|在校荣誉|获奖经历|学生实践经验|社会实践|其他|最高学历|最高教育经历|教育经历|教育背景|工作经历|实习经历|项目经历|项目经验|科研经历|校内活动|校园经历|社团经历|学生工作)(?:\s|$)/.test(title)&&title.length<80)return title;
     }
     return '';
   }
@@ -86,6 +89,7 @@
     return '';
   }
   function descriptor(el,scope,config={}){
+    if(el.closest('.jbs_three_layers_input_wrapper'))config={...config,referencePicker:true};
     const type=config.type||kind(el),radios=type==='radio'?(el.type==='radio'?query(scope,'input[type="radio"]').filter(r=>r.name===el.name&&r.name&&eligible(r)):shown(el,'input[type="radio"]')):null;
     return {el,scope,type,config,radios:radios?.length?radios:[el]};
   }
@@ -118,7 +122,8 @@
         if(!stableIds.has(el))stableIds.set(el,'node-'+(++nextStableId));
         const rect=el.getBoundingClientRect();
         const path=config.path?A.recordPath(config.path,s.index??0):null;
-        const field={id,label,tokens:tokens.length?tokens:[linked,el.getAttribute('aria-label'),el.placeholder,el.name,el.id,el.autocomplete].filter(Boolean),...ctx,type:d.type,path,value:C.read(d),required:!!el.required||el.getAttribute('aria-required')==='true',evidence:config.path?'站点配置':labels.length||containerLabels.length?'可见关联标签':inferred.evidence||'控件属性',options:el.tagName==='SELECT'?Array.from(el.options).map(o=>o.textContent):null};
+        const field={id,label,tokens:tokens.length?tokens:[linked,el.getAttribute('aria-label'),el.placeholder,el.name,el.id,el.autocomplete].filter(Boolean),...ctx,type:d.type,path,value:C.read(d),required:!!el.required||el.getAttribute('aria-required')==='true'||!!container?.classList.contains('is-required'),evidence:config.path?'站点配置':labels.length||containerLabels.length?'可见关联标签':inferred.evidence||'控件属性',options:el.tagName==='SELECT'?Array.from(el.options).map(o=>o.textContent):null};
+        if(d.config.referencePicker)field.matchWarning='自动遍历完整路径并核对真实选中项；歧义时停止';
         if(!field.context)field.context=structural.context||inferred.context||'';
         const rangeLabel=dateRangeLabel(el);if(rangeLabel&&!config.path&&!config.label){field.label=rangeLabel;field.tokens=[rangeLabel];field.evidence='同一时间段的起止控件';}
         field.regionRole=structural.regionRole;field.regionLevel=structural.regionLevel;
@@ -167,7 +172,7 @@
     const results=[],touched=new Map();
     for(const item of message.items){const d=registry.get(item.id);if(!d){results.push({id:item.id,status:'stale',error:'扫描已失效'});continue;}
       if(selectedScope&&(!item.path||!ResumeMatcher.allowedPath(d.field,item.path))){results.push({id:item.id,status:'failed',error:'资料路径不属于所选经历'});continue;}
-      d.sourcePath=item.path;d.manualOption=item.manualOption===true;d.signal=operationController.signal;if(d.signal.aborted){results.push({id:item.id,status:'failed',error:'操作已取消'});continue;}
+      d.referenceData=item.referenceData||null;d.sourcePath=item.path;d.manualOption=item.manualOption===true;d.signal=operationController.signal;if(d.signal.aborted){results.push({id:item.id,status:'failed',error:'操作已取消'});continue;}
       try{const r=item.verifyOnly?await C.verify(d,item.value):await C.fill(d,item.value,message.overwrite);results.push({id:item.id,...r});if(r.status==='filled'||r.status==='verified'){const key=d.sectionScope.scope;touched.set(key,d.sectionScope);}}catch(e){let candidates=[];try{candidates=C.candidates(d);}catch{}results.push({id:item.id,status:'failed',error:e.message,candidates});}
     }
     await new Promise(resolve=>setTimeout(resolve,350));
@@ -188,11 +193,11 @@
       const existing=Array.from(registry.values()).find(d=>d.el===el);if(existing)return existing.field;
       const visibleText=ResumeLayout.collect(document),near=ResumeLayout.infer(el,visibleText,shown(document,'input,textarea,select'));
       const direct=Array.from(el.labels||[]).filter(ResumeLayout.visible).map(text)[0]||el.getAttribute('aria-label');
-      const structure=ResumeLayout.associate(el),resolved=direct||structure.label||near.label||el.placeholder||el.name||'未命名字段';
+      const structure=ResumeLayout.associate(el),resolved=dateRangeLabel(el)||direct||structure.label||near.label||el.placeholder||el.name||'未命名字段';
       const adapterScope=scopes(activeAdapter).find(s=>!s.error&&s.scope?.contains(el))||{config:{}};
       return {label:resolved,tokens:[resolved],...contextFor(el,adapterScope),regionRole:structure.regionRole,regionLevel:structure.regionLevel,datePart:structure.datePart,datePath:structure.datePath,type:kind(el)};
     },
-    async fill(el,value){if(selectedScope)throw Error('区块模式请在插件预览中核对路径后填写');if(busy)throw Error('正在填写，请稍后');busy=true;try{const d=descriptor(el,document);d.scanUrl=location.href;const result=await C.fill(d,value,true);if(result.status==='filled'){await new Promise(r=>setTimeout(r,350));return C.verify(d,value);}return result;}finally{busy=false;}}
+    async fill(el,value,referenceData){if(selectedScope)throw Error('区块模式请在插件预览中核对路径后填写');if(busy)throw Error('正在填写，请稍后');busy=true;try{const d=descriptor(el,document);d.scanUrl=location.href;d.field=this.describe(el);d.referenceData=referenceData;const result=await C.fill(d,value,true);if(result.status==='filled'){await new Promise(r=>setTimeout(r,350));return C.verify(d,value);}return result;}finally{busy=false;}}
   };
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message.type==='RF_CANCEL'){operationController?.abort();Promise.resolve(pendingOperation).catch(()=>{}).then(()=>respond({cancelled:true}));return true;}
@@ -208,7 +213,7 @@
       if(message.type==='RF_SCAN')return scan(message.adapters,message.counts);
       if(message.type==='RF_PREPARE')return prepare(message.counts||{});
       if(message.type==='RF_FILL')return fill(message);
-      return Promise.all(message.items.map(async item=>({id:item.id,...(registry.has(item.id)?await C.verify(registry.get(item.id),item.value):{status:'stale'})})));
+      const checked=[];for(const item of message.items){const d=registry.get(item.id);if(d){d.referenceData=item.referenceData||d.referenceData;d.sourcePath=item.path||d.sourcePath;}checked.push({id:item.id,...(d?await C.verify(d,item.value):{status:'stale'})});}return checked;
     })().finally(()=>busy=false);
     pendingOperation.then(respond,e=>respond({error:e.message}));
     return true;

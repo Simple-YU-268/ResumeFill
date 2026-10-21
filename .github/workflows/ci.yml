@@ -21,8 +21,10 @@ jobs:
       - run: npm --prefix desktop run prepare:resources
       - run: npm --prefix desktop test
       - run: node desktop/extension-test.cjs
+      - run: node desktop/auto-pair-browser-test.cjs
       - run: node desktop/auth-ui-test.cjs
       - run: node desktop/ui-test.cjs
+      - run: node desktop/updater-ui-test.cjs
       - run: node desktop/pdf-test.cjs
       - run: npm run test:browser
       - run: node scripts/verify-ai-browser.cjs --mock

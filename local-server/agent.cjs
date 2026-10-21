@@ -50,7 +50,7 @@ class AgentEngine{
   }
   s.lastReply={callId:input.callId,digest};s.pending=null;this.log(s,'tool_result',{tool:call.name,callId:call.id});this.next(s);return this.view(s);
  }
- toolError(id,input){const s=this.get(id);if(!s.pending||s.pending.id!==input.callId)throw Error('工具回执已失效');this.log(s,'tool_error',{tool:s.pending.name});this.review(s,'工具执行中断，请检查页面或服务连接后继续');return this.view(s);}
+ toolError(id,input){const s=this.get(id);if(!s.pending||s.pending.id!==input.callId)throw Error('工具回执已失效');const failure=AI.toolFailure({code:input.errorCode},s.pending.name);this.log(s,'tool_error',{tool:s.pending.name,code:failure.code});this.review(s,failure.message);return this.view(s);}
  resume(id,input){const s=this.get(id);if(!['needs_input'].includes(s.status))throw Error('当前任务不能继续');const obs=this.observation(input.observation);if(obs.pageKey!==s.pageKey)throw Error('不能在其它页面继续');if(s.steps>=24)throw Error('步数已耗尽，请重新启动任务');s.observation=obs;s.approved=obs.bindings;s.results={};s.phase='initial_verify';s.status='running';s.reason='';s.proposals=[];s.matched=false;this.log(s,'resumed',{approvedFields:s.approved.length});this.next(s);return this.view(s);}
  cancel(id){const s=this.get(id);s.status='cancelled';s.pending=null;s.reason='用户已停止';this.log(s,'cancelled');return this.view(s);}
 }
