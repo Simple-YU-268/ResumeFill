@@ -11,6 +11,7 @@ const SECTION_NAMES={...ResumeFieldLabels.sections,skills:'技能',summary:'个�
 const PATH_LABEL_OVERRIDES={basics:{city:'现居城市',idNumber:'证件号码'},education:{school:'就读院校',degree:'学历',gpa:'成绩 / GPA'},work:{company:'公司',position:'职位',description:'工作描述'},projects:{name:'项目名称',role:'承担角色',description:'项目描述'}};
 const fieldLabel=(section,key)=>PATH_LABEL_OVERRIDES[section]?.[key]||globalThis.ResumeFieldLabels?.fields[key]||key;
 function pathLabel(path){const parts=String(path||'').split('.');const section=SECTION_NAMES[parts[0]]||parts[0];
+ if(parts[0]==='family')return '家庭成员 · '+(ResumeMatcher.familyRoles[parts[1]]?.[0]||parts[1])+' · '+fieldLabel('family',parts.slice(2).join('.'));
  if(parts[0]==='fieldAnswers')return '网站补充答案 · 第 '+(Number(parts[1])+1)+' 条';
  if(['skills','summary','custom'].includes(parts[0]))return parts.length>1?section+' · '+parts.slice(1).join('.'):section;
  if(parts.length===3)return section+' 第 '+(Number(parts[1])+1)+' 条 · '+fieldLabel(parts[0],parts[2]);
@@ -53,7 +54,7 @@ async function scan(incremental=false,learning=false){
     const small=document.createElement('small');small.textContent=[field.context,Number.isInteger(field.recordIndex)?`第 ${field.recordIndex+1} 条`:'',field.evidence,field.matchWarning].filter(Boolean).join(' · ');left.append(small);
     const right=document.createElement('div'),select=document.createElement('select');select.setAttribute('aria-label',field.label+' 对应简历字段');
     const blank=document.createElement('option');blank.value='';blank.textContent='跳过 / 尚未确定匹配';select.append(blank);
-    for(const path of Object.keys(values).filter(p=>!snapshot.selectedScope||ResumeMatcher.allowedPath(field,p))){const option=document.createElement('option');option.value=path;option.textContent=pathLabel(path);option.title=path;select.append(option);}
+    for(const path of Object.keys(values).filter(p=>(!snapshot.selectedScope&&!ResumeMatcher.isFamilyField(field))||ResumeMatcher.allowedPath(field,p))){const option=document.createElement('option');option.value=path;option.textContent=pathLabel(path);option.title=path;select.append(option);}
     select.value=chosen;const preview=document.createElement('input');preview.readOnly=true;preview.setAttribute('aria-label','填充值预览');
     const draft=document.createElement('textarea');draft.rows=2;draft.setAttribute('aria-label',field.label+' 补充资料');draft.maxLength=20000;
     const state={field,select,key,small,verified:!!(same&&old.verified),preview,draft,row};
@@ -76,6 +77,7 @@ $('incremental').onclick=()=>run(()=>scan(true));
 // Explicit local learning: no form writes and no model requests with captured values.
 let learningReview=null,learningChecks=[];
 const learnButton=document.createElement('button');learnButton.id='learnScan';learnButton.textContent='重新扫描并学习已填内容';$('scan').after(learnButton);
+const familyMemoLabel=document.createElement('label'),familyMemo=document.createElement('input');familyMemo.type='checkbox';familyMemo.id='autoFamilyLearning';familyMemoLabel.append(familyMemo,document.createTextNode('自动记住手动填写的家庭成员（仅本机）'));const familyMemoNote=document.createElement('p');familyMemoNote.append(familyMemoLabel);$('autoAI').closest('p').after(familyMemoNote);void chrome.storage.local.get('autoFamilyLearning').then(data=>familyMemo.checked=!!data.autoFamilyLearning);familyMemo.onchange=async()=>{await chrome.storage.local.set({autoFamilyLearning:familyMemo.checked});status(familyMemo.checked?'已开启：按所选家庭关系记住手动输入，不覆盖已有不同值。':'已关闭家庭成员自动记忆。');};
 const learnPanel=document.createElement('section');learnPanel.id='learningReview';learnPanel.className='card';learnPanel.hidden=true;$('fields').before(learnPanel);
 function clearLearning(){learningReview=null;learningChecks=[];learnPanel.hidden=true;learnPanel.replaceChildren();}
 function showLearning(review){

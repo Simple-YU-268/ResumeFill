@@ -4,7 +4,7 @@
  const signature=x=>JSON.stringify(x,(_k,v)=>object(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
  const empty=x=>x==null||typeof x==='string'&&!x.trim()||Array.isArray(x)&&!x.length||object(x)&&!Object.keys(x).length;
  const valid=k=>!['__proto__','prototype','constructor'].includes(k)&&!k.startsWith('_');
- const sensitive=path=>/phone|mobile|email|address|birthday|birthPlace|birthRegion|hukou|nativePlace|nativeRegion|currentResidence|idNumber|idCard|passport|politicalStatus|emergency|salary|电话|手机|邮箱|地址|生日|出生|户籍|籍贯|证件|身份证|联系人|薪资|政治面貌/i.test(path.join('.'));
+ const sensitive=path=>path[0]==='family'||/phone|mobile|email|address|birthday|birthPlace|birthRegion|hukou|nativePlace|nativeRegion|currentResidence|idNumber|idCard|passport|politicalStatus|emergency|salary|电话|手机|邮箱|地址|生日|出生|户籍|籍贯|证件|身份证|联系人|薪资|政治面貌/i.test(path.join('.'));
  function plan(local,remote){
   if(!object(local)||!object(remote)||!object(remote.basics))throw Error('资料格式无效，请检查桌面个人资料');
   const items=[];

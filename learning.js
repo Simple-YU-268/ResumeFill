@@ -37,7 +37,7 @@
       if(item.sensitive&&!sensitiveApproved)throw Error('请单独确认保存所选敏感资料');
       if(!item.path||item.path.startsWith('fieldAnswers.')){Object.assign(out,A.save(out,[{field:item.field,value:item.value}],review.page));continue;}
       const parts=item.path.split('.');if(parts.some(p=>!p||['__proto__','prototype','constructor'].includes(p))||!root.ResumeMatcher.allowedPath(item.field,item.path))throw Error('资料路径无效');
-      if(parts[0]!=='basics'&&!keys[parts[0]]&&!Object.hasOwn(root.ResumeMatcher.flatten(resume),item.path))throw Error('此资料需在管理页修改');
+      if(!['basics','family'].includes(parts[0])&&!keys[parts[0]]&&!Object.hasOwn(root.ResumeMatcher.flatten(resume),item.path))throw Error('此资料需在管理页修改');
       if(keys[parts[0]]){const n=Number(parts[1]);if(parts.length!==3||!Number.isInteger(n)||n<0||n>29)throw Error('经历路径无效');out[parts[0]]??=[];if(!Array.isArray(out[parts[0]])||n>out[parts[0]].length)throw Error('经历序号不连续，请先补齐前面的经历');if(n===out[parts[0]].length)out[parts[0]].push({});}
       let node=out;for(const part of parts.slice(0,-1)){if(!Object.hasOwn(node,part))node[part]={};node=node[part];if(!node||typeof node!=='object')throw Error('资料结构冲突');}
       const last=parts.at(-1);if(Object.hasOwn(node,last)&&!['string','number'].includes(typeof node[last]))throw Error('不能覆盖结构化资料');node[last]=item.value;

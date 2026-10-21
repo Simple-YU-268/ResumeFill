@@ -3,7 +3,7 @@
 const names={...window.ResumeFieldLabels.sections,...window.ResumeFieldLabels.fields};
 const basics=['name','gender','birthday','phone','email','city','idNumber','nationality','ethnicity','politicalStatus','maritalStatus','hukouAddress','nativePlace','address','website'];
 const recordKeys={education:['school','major','degree','startDate','endDate','gpa'],work:['company','position','startDate','endDate','description'],projects:['name','role','startDate','endDate','description']};
-const groups=['basics','education','work','projects','skills','custom','fieldAnswers','other'];
+const groups=['basics','family','education','work','projects','skills','custom','fieldAnswers','other'];
 const forbidden=k=>!k||/[.\[\]]/.test(k)||['__proto__','prototype','constructor'].includes(k)||k.startsWith('_');
 const isObject=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);const clone=v=>JSON.parse(JSON.stringify(v));
 function el(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;}
@@ -17,6 +17,16 @@ class Editor{
  saved(){this.dirty=false;this.undo=null;this.render();}
  remove(path){let target=this.data;for(const k of path.slice(0,-1))target=target[k];this.undo={path:[...path],value:clone(target[path.at(-1)]),array:Array.isArray(target)};if(Array.isArray(target))target.splice(path.at(-1),1);else delete target[path.at(-1)];for(const key of this.errors.keys()){const p=JSON.parse(key);if(path.every((k,i)=>p[i]===k))this.errors.delete(key);}this.changed();this.render();}
  button(text,fn,cls){const b=el('button',text,cls);b.type='button';b.addEventListener('click',fn);return b;}
+ family(panel){
+  const value=this.data.family;if(value!==undefined&&!isObject(value)){this.node(panel,['family'],'family',value);return;}
+  const members=value||{},roles=window.ResumeMatcher.familyRoles;
+  for(const [role,member]of Object.entries(members)){
+   const card=el('div',undefined,'profile-record'),head=el('div',undefined,'section-head');head.append(el('h3',roles[role]?.[0]||role),this.button('移除该成员',()=>this.remove(['family',role]),'danger-link'));card.append(head);
+   if(isObject(member)){const grid=el('div',undefined,'profile-grid');for(const key of new Set([...Object.keys(ResumeMatcher.familyFields),...Object.keys(member)]))if(!key.startsWith('_'))this.node(grid,['family',role,key],key,member[key]??'');card.append(grid);}else this.node(card,['family',role],role,member);panel.append(card);
+  }
+  if(!Object.keys(members).length)panel.append(el('p','尚未保存家庭成员。添加关系后填写，或在网页开启本地自动记忆。','profile-empty'));
+  const row=el('div',undefined,'buttons'),select=el('select');select.setAttribute('aria-label','添加家庭成员关系');for(const [role,labels]of Object.entries(roles))if(!Object.hasOwn(members,role)){const option=el('option',labels[0]);option.value=role;select.append(option);}row.append(select,this.button('添加家庭成员',()=>{if(!select.value)return;this.set(['family',select.value],{relationship:roles[select.value][0]});this.render();}));panel.append(row,el('p','多位同关系成员需更具体的身份标识，暂不自动归入同一个路径。','muted'));
+ }
  primitive(parent,path,key,value){const titleText=path[0]==='projects'&&key==='name'?'项目名称':key==='skills'?'专业技能':names[key]||key;const label=el('label',titleText,'profile-field');const title=el('span',titleText);label.replaceChildren(title);const id='pf-'+(++this.counter);let input;
  if(typeof value!=='object'&&window.ResumeMatcher?.enums[key]){input=el('select');const blank=el('option','请选择');blank.value='';input.append(blank);for(const group of ResumeMatcher.enums[key]){const option=el('option',group[0]);option.value=group[0];input.append(option);}const raw=String(value??'');if(raw&&!Array.from(input.options).some(o=>o.value===raw)){const existing=el('option',raw+'（原有资料）');existing.value=raw;input.append(existing);}input.value=raw;input.addEventListener('change',()=>{this.set(path,input.value);});}
  else if(typeof value==='boolean'){input=el('input');input.type='checkbox';input.checked=value;label.classList.add('profile-checkbox');}
@@ -42,11 +52,12 @@ class Editor{
  const info=el('div',undefined,'profile-editor-info');info.append(el('span',this.dirty?'有修改尚未保存':'资料已载入，可直接编辑','profile-save-state'));if(this.undo)info.append(this.button('撤销上次删除',()=>{const u=this.undo,target=this.get(u.path.slice(0,-1)),key=u.path.at(-1);if(u.array&&Array.isArray(target))target.splice(Math.min(key,target.length),0,u.value);else if(isObject(target)&&!Object.hasOwn(target,key))target[key]=u.value;this.undo=null;this.changed();this.render();}));this.host.append(info);
  const panel=el('div',undefined,'profile-panel');panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby','profile-tab-'+this.tab);this.host.append(panel);
  if(recordKeys[this.tab])this.records(panel,this.tab);
+ else if(this.tab==='family')this.family(panel);
  else if(this.tab==='basics'){const value=this.data.basics;if(value!==undefined&&!isObject(value))this.node(panel,['basics'],'basics',value);else{const grid=el('div',undefined,'profile-grid');for(const k of new Set([...basics,...Object.keys(value||{})]))if(!k.startsWith('_')&&!['hukou','nativeRegion','currentResidence'].includes(k))this.node(grid,['basics',k],k,Object.hasOwn(value||{},k)?value[k]:'');panel.append(grid);this.addField(panel,['basics']);}}
  else if(this.tab==='skills'){this.node(panel,['skills'],'skills',this.data.skills??'');this.node(panel,['summary'],'summary',this.data.summary??'');}
  else if(this.tab==='fieldAnswers')this.answers(panel);
  else if(this.tab==='custom'){if(this.data.custom===undefined||isObject(this.data.custom)){const grid=el('div',undefined,'profile-grid');for(const [k,v]of Object.entries(this.data.custom||{})){const row=el('div',undefined,'profile-custom-item');this.node(row,['custom',k],k,v);row.append(this.button('移除此信息',()=>this.remove(['custom',k]),'danger-link'));grid.append(row);}panel.append(grid);this.addField(panel,['custom']);}else this.node(panel,['custom'],'custom',this.data.custom);}
- else{const entries=Object.entries(this.data).filter(([k])=>!['basics','education','work','projects','skills','custom','fieldAnswers','summary'].includes(k)&&!k.startsWith('_'));if(!entries.length)panel.append(el('p','暂时没有其他资料。导入文件中的额外信息会完整保留。','profile-empty'));for(const [k,v]of entries)this.node(panel,[k],k,v);}
+ else{const entries=Object.entries(this.data).filter(([k])=>!['basics','family','education','work','projects','skills','custom','fieldAnswers','summary'].includes(k)&&!k.startsWith('_'));if(!entries.length)panel.append(el('p','暂时没有其他资料。导入文件中的额外信息会完整保留。','profile-empty'));for(const [k,v]of entries)this.node(panel,[k],k,v);}
  const genders=el('datalist');genders.id='profile-genders';for(const value of ['男','女','其他','不愿透露']){const option=el('option');option.value=value;genders.append(option);}this.host.append(genders);
  }
 }

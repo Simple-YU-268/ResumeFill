@@ -30,7 +30,7 @@
         const value={province:r.province,city:r.city,county:r.county,path:r.path};if(JSON.stringify(existing)!==JSON.stringify(value)){out.basics[target]=value;changes.push({path:'basics.'+target,value});}meta.regions[target]={raw,code:r.code,dataset:'2023-06-30'};
       }else issues.push({path:'basics.'+source,raw,status:result.status,candidates:result.candidates});
     }
-    const dates=[];if(out.basics)dates.push([out.basics,'birthday','basics.birthday']);for(const group of ['education','work','projects'])for(const [i,r] of (out[group]||[]).entries())for(const key of ['startDate','endDate'])dates.push([r,key,`${group}.${i}.${key}`]);
+    const dates=[];for(const [role,member]of Object.entries(out.family||{}))if(member&&typeof member==='object'&&!Array.isArray(member))dates.push([member,'birthday','family.'+role+'.birthday']);if(out.basics)dates.push([out.basics,'birthday','basics.birthday']);for(const group of ['education','work','projects'])for(const [i,r] of (out[group]||[]).entries())for(const key of ['startDate','endDate'])dates.push([r,key,`${group}.${i}.${key}`]);
     for(const [obj,key,path]of dates){if(!obj[key])continue;const d=parseDate(obj[key]);if(!d){issues.push({path,status:'invalid-date'});continue;}if(d.iso!==obj[key]){meta.dates[path]={raw:obj[key],precision:d.precision};obj[key]=d.iso;changes.push({path,value:d.iso});}}
     return {resume:out,changes,issues};
   }

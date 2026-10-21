@@ -1,5 +1,16 @@
 (function(root) {
   const recordSections=['education','work','projects','languages','skills','awards','activities'];
+  const familyRoles={father:['父亲','父','爸爸','father'],mother:['母亲','母','妈妈','mother'],spouse:['配偶','丈夫','妻子','spouse','husband','wife'],paternalGrandfather:['祖父','爷爷'],paternalGrandmother:['祖母','奶奶'],maternalGrandfather:['外祖父','外公'],maternalGrandmother:['外祖母','外婆']};
+  const familyFields={name:['姓名','成员姓名','家属姓名'],relationship:['与本人关系','与申请人关系','与应聘者关系','关系','称谓','家庭关系','亲属关系'],idNumber:['身份证号码','身份证号','证件号码','身份证件号码'],birthday:['出生日期','出生年月','生日'],politicalStatus:['政治面貌'],employerAndPosition:['工作单位及职务','工作单位和职务'],company:['工作单位','单位名称'],position:['职务','职位'],employmentStatus:['人员状态','工作状态','在职状态'],phone:['手机号码','联系电话','电话'],gender:['性别'],ethnicity:['民族'],address:['地址','家庭住址']};
+  function familyRole(value){const s=normalize(value);const hits=Object.entries(familyRoles).filter(([,names])=>names.some(n=>normalize(n)===s));return hits.length===1?hits[0][0]:null;}
+  function isFamilyField(field){return field.section==='family'||/^(父亲|母亲|配偶|祖父|祖母|外祖父|外祖母)(?:的)?(?:姓名|身份证|证件|出生|政治|工作|职务|电话|手机|性别|民族)/.test(String(field.label||''));}
+  function familyPath(field){
+    if(!isFamilyField(field)||field.ambiguousLabel||field.familyAmbiguous)return null;
+    let role=field.familyRole,label=String(field.label||'');const explicit=label.match(/^(父亲|母亲|配偶|外祖父|外祖母|祖父|祖母)(?:的)?/);if(explicit){const detected=familyRole(explicit[1]);if(role&&role!==detected)return null;role=detected;label=label.slice(explicit[0].length);}
+    if(!Object.hasOwn(familyRoles,role))return null;
+    if(field.datePart)return `family.${role}.birthdayParts.${field.datePart}`;
+    const hits=Object.entries(familyFields).filter(([,names])=>names.some(n=>labelVariants(label).includes(normalize(n))));return hits.length===1?`family.${role}.${hits[0][0]}`:null;
+  }
   const enums={
     gender:[['男','男性','male','man'],['女','女性','female','woman'],['其他'],['不愿透露','保密']],
     politicalStatus:[['中共党员','中国共产党党员','共产党员','党员'],['中共预备党员','中国共产党预备党员','预备党员'],['共青团员','中国共产主义青年团团员','团员'],['民革党员','中国国民党革命委员会党员'],['民盟盟员','中国民主同盟盟员'],['民建会员','中国民主建国会会员'],['民进会员','中国民主促进会会员'],['农工党党员','中国农工民主党党员'],['致公党党员','中国致公党党员'],['九三学社社员'],['台盟盟员','台湾民主自治同盟盟员'],['无党派人士'],['群众','普通群众']],
@@ -64,6 +75,7 @@
     return aliases[path.replace(/\.\d+\./g,'.*.')]||(!path.includes('.')?aliases['basics.'+path]:null)||(path.startsWith('custom.')?[path.slice(7)]:[]);
   }
   function flatten(data, prefix='', out={}) {
+    const member=prefix.match(/^family\.([^.]+)$/)?.[1];if(member&&familyRoles[member]&&!data?.relationship)out[prefix+'.relationship']=familyRoles[member][0];
     for (const [key,value] of Object.entries(data || {})) {
       if(!prefix&&key==='_normalization')continue;
       if(!prefix&&key==='fieldAnswers'){
@@ -71,6 +83,7 @@
         continue;
       }
       const path = prefix ? `${prefix}.${key}` : key;
+      if(/^family\.[^.]+$/.test(prefix)&&['IDnmber','IDnumber','IDNumber'].includes(key)&&!Object.hasOwn(data,'idNumber')&&typeof value==='string')out[prefix+'.idNumber']=value;
       if(Array.isArray(value)&&path.endsWith('.courses')&&value.every(v=>typeof v==='string'))out[path]=value.filter(v=>v.trim()).join('、');
       if (value !== null && typeof value === 'object') flatten(value,path,out);
       else if (typeof value === 'string' || typeof value === 'number') out[path]=String(value);
@@ -79,6 +92,7 @@
     return out;
   }
   function match(field, values) {
+    if(isFamilyField(field)){const path=familyPath(field);return path&&Object.hasOwn(values,path)?{path,score:100}:null;}
     field=resolveField(field,values);if(!field)return null;
     if(/^其他(学校|专业)$/.test(field.label||''))return null;
     if(field.ambiguousLabel||field.contextBlocked)return null;
@@ -94,6 +108,7 @@
     const section=field.section||(/教育|学历|education/.test(context)?'education':/工作|实习|work|employment/.test(context)?'work':/项目|project/.test(context)?'projects':'');
     const ranked=[];
     for (const [path,value] of Object.entries(values)) {
+      if(path.startsWith('family.'))continue;
       if(foreignPerson(field)&&path.startsWith('basics.')&&path!==semantic?.path)continue;
       if(recordSections.includes(section)&&/^(education|work|projects|languages|skills|awards|activities)\./.test(path)&&!path.startsWith(section+'.'))continue;
       if(Number.isInteger(field.recordIndex)&&section&&/^(education|work|projects|languages|skills|awards|activities)\./.test(path)&&!path.startsWith(section+'.'+field.recordIndex+'.'))continue;
@@ -117,6 +132,7 @@
     return ranked[0];
   }
   function infer(field){
+    if(isFamilyField(field)){const path=familyPath(field);return path?{path,score:100}:null;}
     if(field.ambiguousLabel||field.contextBlocked||protectedLabel(field))return null;
     if(foreignPerson(field)){
       const label=normalize(field.label),key=/^紧急联系人姓名$/.test(label)?'emergencyContactName':/^紧急联系方式$|^紧急联系人(?:电话|手机)$/.test(label)?'emergencyContactPhone':null;
@@ -174,6 +190,8 @@
     return {handled:true,hits,reason:hits.length>1?'数值区间边界重叠，请人工选择':hits.length?'唯一同单位区间':'没有同单位的明确区间，请人工选择'};
   }
   function allowedPath(field,path){
+    if(isFamilyField(field))return !!familyPath(field)&&path===familyPath(field);
+    if(path.startsWith('family.'))return false;
     if(field.contextBlocked||protectedLabel(field)||foreignPerson(field)&&path.startsWith('basics.')&&path!==infer(field)?.path)return false;
     const section=field.section;if(!['basics',...recordSections].includes(section))return true;
     return path.startsWith(section+'.')&&(!Number.isInteger(field.recordIndex)||section==='basics'||path.startsWith(section+'.'+field.recordIndex+'.'));
@@ -193,6 +211,7 @@
     return !question&&field.section&&Number.isInteger(field.recordIndex)&&eligible.length<=12?eligible:[];
   }
   function resolveField(field,values){
+    if(isFamilyField(field)&&!familyPath(field))return null;
     if(field.recordPolicy==='uniqueRecord'){
       let indices=[...new Set(Object.keys(values).filter(p=>p.startsWith(field.section+'.')).map(p=>p.split('.')[1]).filter(i=>/^\d+$/.test(i)))];
       if(field.section==='languages'){
@@ -223,6 +242,6 @@
     const skill=path.match(/^(skills\.\d+)\.name$/),category=skill&&values[skill[1]+'.category'];
     return {sourceValue:value,kind:/^basics\.(?:city|hukouAddress|nativePlace|expectedCity)$/.test(path)?'region':'exact',parts:category?[String(category),value]:value.split(/\s*[>＞→]\s*/).filter(Boolean)};
   }
-  root.ResumeMatcher={recordSections,flatten,match,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,numericInterval,numericOptions,allowedPath,candidatePaths};
+  root.ResumeMatcher={familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,numericInterval,numericOptions,allowedPath,candidatePaths};
   if (typeof module!=='undefined') module.exports=root.ResumeMatcher;
 })(globalThis);

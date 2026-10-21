@@ -14,7 +14,7 @@ assert.equal(match('专业',{section:'education',recordIndex:0}),'education.0.ma
 assert.equal(match('验证码'),undefined);
 assert.equal(M.match({label:'性别',tokens:[],context:''},{'basics.gender':''}).path,'basics.gender');
 assert.equal(M.match({label:'性别',tokens:[],context:''},{gender:'女'}).path,'gender');
-assert.equal(M.infer({label:'姓名'}).path,'basics.name');assert.equal(M.infer({label:'身份证号码'}).path,'basics.idNumber');assert.equal(M.infer({label:'父亲姓名'}),null);
+assert.equal(M.infer({label:'姓名'}).path,'basics.name');assert.equal(M.infer({label:'身份证号码'}).path,'basics.idNumber');assert.equal(M.infer({label:'父亲姓名'}).path,'family.father.name');
 assert.equal(M.match({label:'现居住地址',tokens:['city']},{'basics.city':'南京'}),null);
 assert.equal(M.match({label:'city-field_anld7OmP',tokens:['city']},{'basics.city':'南京'}),null);
 assert.equal(M.match({label:'父亲姓名',tokens:['name']},{'basics.name':'本人'}),null);

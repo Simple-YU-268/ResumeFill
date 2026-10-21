@@ -1,5 +1,6 @@
 importScripts('profile.js','matcher.js','option-match.js','answers.js','ai.js');
 const requests=new Map();
+let profileWriteQueue=Promise.resolve();
 chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
 chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
 async function matchAI(message){
@@ -27,16 +28,23 @@ async function matchAI(message){
   }catch(e){if(e.name==='AbortError')throw Error('AI 请求已取消或超过 25 秒');throw e;}finally{clearTimeout(timer);if(requests.get(requestId)===controller)requests.delete(requestId);}
 }
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
-  if(['RF_ASSIST_DATA','RF_ASSIST_SAVE'].includes(message.type)){
+  if(['RF_ASSIST_DATA','RF_ASSIST_SAVE','RF_FAMILY_LEARN'].includes(message.type)){
     if(sender.id!==chrome.runtime.id||!sender.tab||new URL(sender.url||sender.tab.url).origin!==new URL(sender.tab.url).origin||!/^https?:/.test(sender.url||'')){respond({error:'仅允许已启用的网页助手使用'});return;}
-    (async()=>{const {resume}=await chrome.storage.local.get('resume');if(!resume)throw Error('请先保存简历');
+    const perform=async()=>{const {resume}=await chrome.storage.local.get('resume');if(!resume)throw Error('请先保存简历');
       if(message.type==='RF_ASSIST_DATA')return {resume};
       const f=message.field;if(!f||typeof f.label!=='string'||f.label.length>500||typeof message.value!=='string')throw Error('资料格式无效');
+      if(message.type==='RF_FAMILY_LEARN'){
+        const {autoFamilyLearning}=await chrome.storage.local.get('autoFamilyLearning');if(!autoFamilyLearning)return {ignored:true};
+        const path=ResumeMatcher.familyPath(f);if(!path||ResumeAnswers.protectedField(f)||!message.value.trim()||/\*{2,}/.test(message.value))throw Error('家庭成员关系或内容未确定');
+        if(path.endsWith('.idNumber')&&!/^(?:\d{15}|\d{17}[\dXx])$/.test(message.value.trim()))throw Error('证件号尚未完整，未自动保存');
+        const values=ResumeMatcher.flatten(resume);if(values[path]===message.value.trim())return {ignored:true};
+        const updated=await ResumeProfile.enrich(ResumeAnswers.save(resume,[{field:f,value:message.value.trim(),path}],{origin:new URL(sender.url).origin,page:new URL(sender.url).pathname,url:sender.url}));const latest=await chrome.storage.local.get('resume');if(JSON.stringify(latest.resume)!==JSON.stringify(resume))throw Error('资料已变化，请重新核对后学习');await chrome.storage.local.set({resume:updated.resume});return {saved:true,path};
+      }
       const u=new URL(sender.url),page={origin:u.origin,page:u.pathname,url:u.href};
       const known=ResumeAnswers.match(f,resume,page)||ResumeMatcher.match(f,ResumeMatcher.flatten(resume))||ResumeMatcher.infer(f);
       const path=known?.path||null;
       const updated=await ResumeProfile.enrich(ResumeAnswers.save(resume,[{field:f,value:message.value,path}],page));await chrome.storage.local.set({resume:updated.resume});return {resume:updated.resume,normalizationIssues:updated.issues};
-    })().then(respond,e=>respond({error:e.message}));return true;
+    };const action=message.type==='RF_ASSIST_DATA'?perform():profileWriteQueue.then(perform,perform);if(message.type!=='RF_ASSIST_DATA')profileWriteQueue=action.catch(()=>{});action.then(respond,e=>respond({error:e.message}));return true;
   }
   if(!['RF_AI_MATCH','RF_AI_TEST','RF_AI_OPTION','RF_AI_CANCEL'].includes(message.type))return;
   if(!sender.url?.startsWith(chrome.runtime.getURL(''))){respond({error:'AI 仅接受扩展界面请求'});return;}

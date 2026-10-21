@@ -38,7 +38,7 @@
     const necessary=new Set(chosen.flatMap(f=>f.candidatePaths));
     const candidates=Object.entries(values).filter(([p])=>necessary.has(p)).map(([path,value])=>shareValues?{path,value:String(value).slice(0,1200)}:{path});
     if(candidates.length>400)throw Error('简历字段超过 400 个，请精简后匹配');
-    const packet={version:1,shareValues:!!shareValues,fields:chosen.map(f=>({id:f.id,stableId:f.stableId||f.id,label:String(f.label).slice(0,160),section:f.section||null,recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,candidatePaths:f.candidatePaths,type:f.type,required:!!f.required,options:(f.options||[]).slice(0,60).map(o=>String(o).slice(0,120))})),candidates};
+    const packet={version:1,shareValues:!!shareValues,fields:chosen.map(f=>({id:f.id,stableId:f.stableId||f.id,label:String(f.label).slice(0,160),section:f.section||null,...f.section==='family'?{familyRole:f.familyRole,familyAmbiguous:!!f.familyAmbiguous}:{},recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,candidatePaths:f.candidatePaths,type:f.type,required:!!f.required,options:(f.options||[]).slice(0,60).map(o=>String(o).slice(0,120))})),candidates};
     if(page){const u=new URL(page);packet.page=u.origin+u.pathname;}
     if(JSON.stringify(packet).length>150000)throw Error('AI 请求内容过大，请减少字段或关闭附带简历值');
     return packet;
@@ -61,7 +61,7 @@
       if(!m||!fields.has(m.fieldId)||!paths.has(m.path)||seen.has(m.fieldId)||typeof m.confidence!=='number'||!Number.isFinite(m.confidence)||m.confidence<0||m.confidence>1)throw Error('AI 返回未知字段、重复匹配或简历之外的路径，已拒绝应用');
       seen.add(m.fieldId);const f=fields.get(m.fieldId);
       const wrongRecord=Number.isInteger(f.recordIndex)&&matcher().recordSections.includes(f.section)&&!m.path.startsWith(f.section+'.'+f.recordIndex+'.');
-      const wrongSection=f.section&&['basics',...matcher().recordSections].includes(f.section)&&!m.path.startsWith(f.section+'.');
+      const wrongFamily=(matcher().isFamilyField(f)||m.path.startsWith('family.'))&&!matcher().allowedPath(f,m.path);const wrongSection=wrongFamily||f.section&&['basics',...matcher().recordSections].includes(f.section)&&!m.path.startsWith(f.section+'.');
       const match={fieldId:m.fieldId,path:m.path,confidence:m.confidence,reason:typeof m.reason==='string'?m.reason.slice(0,240):''};
       const outside=f.candidatePaths&&!f.candidatePaths.includes(m.path);
       if(outside||wrongRecord||wrongSection||m.confidence<0.85)rejected.push({...match,error:outside?'不在该字段的候选范围内':wrongRecord||wrongSection?'经历或模块不一致':'置信度不足 0.85'});else accepted.push(match);

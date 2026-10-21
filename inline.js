@@ -25,14 +25,14 @@
     panel.replaceChildren();const title=document.createElement('p');title.textContent='简历快填 · '+field.label;panel.append(title);
     for(const {path,reason,confirmed} of candidates.slice(0,6))button((confirmed?'':reason+' · ')+path+'：'+values[path],async()=>{
       if(!el.isConnected)throw Error('输入框已变化，请重新选择');
-      const result=await ResumeFillPage.fill(el,values[path],ResumeMatcher.referenceData(path,values));if(result.status!=='verified')throw Error(result.error||'回读未通过');hide();
+      if(ResumeMatcher.isFamilyField(field)&&ResumeMatcher.familyPath(ResumeFillPage.describe(el))!==path)throw Error('家庭成员关系已变化，请重新选择');const result=await ResumeFillPage.fill(el,values[path],ResumeMatcher.referenceData(path,values));if(result.status!=='verified')throw Error(result.error||'回读未通过');hide();
     });
     if(!candidates.length){const hint=document.createElement('small');hint.textContent=known?`已识别 ${known.path}，请在网页输入后保存。`:'暂无匹配；在网页输入答案后可保存为新资料。';panel.append(hint);}
     if(query&&(!known||!values[known.path])){
       const captured=el.value;
       button(known?'保存到 '+known.path:'创建新 JSON 项目并保存',async()=>{
         if(!el.isConnected||el.value!==captured)throw Error('输入内容已变化，请重新选择保存');
-        const saved=await request('RF_ASSIST_SAVE',{field,value:captured});resume=saved.resume;
+        if(ResumeMatcher.isFamilyField(field)&&ResumeMatcher.familyPath(ResumeFillPage.describe(el))!==known?.path)throw Error('家庭成员关系已变化，请重新选择');const saved=await request('RF_ASSIST_SAVE',{field,value:captured});resume=saved.resume;
         panel.replaceChildren();const done=document.createElement('p');done.textContent='已保存到本地简历 JSON，下次自动匹配。'+(saved.normalizationIssues?.length?' 地区/日期有待确认项，请在插件中整理。':'');panel.append(done);
       });
     }
@@ -43,4 +43,15 @@
   document.addEventListener('pointerdown',e=>{if(e.target!==host&&e.target!==active)hide();},true);
   document.addEventListener('keydown',e=>{if(e.key==='Escape')hide();},true);
   addEventListener('scroll',()=>{if(active)position();},true);addEventListener('resize',()=>{if(active)position();});
+  // Opt-in local memory for manually committed family fields; never learn script fills.
+  const edits=new WeakMap();let lastGesture=0;
+  function memoNotice(message){const note=document.createElement('div');note.textContent=message;note.setAttribute('role','status');note.style.cssText='position:fixed;right:16px;top:16px;z-index:2147483647;background:#fffefa;color:#283f3c;border:1px solid #a7b9ad;border-radius:12px;padding:12px;font:13px system-ui;max-width:340px';document.documentElement.append(note);setTimeout(()=>note.remove(),4000);}
+  for(const type of ['pointerdown','keydown'])document.addEventListener(type,e=>{if(e.isTrusted)lastGesture=Date.now();},true);
+  document.addEventListener('focusin',e=>{const el=e.target;if(!eligible(el)&&el.tagName!=='SELECT'&&!(el instanceof HTMLInputElement&&['date','month','datetime-local'].includes(el.type)))return;const field=ResumeFillPage.describe(el);if(ResumeMatcher.isFamilyField(field))edits.set(el,{path:ResumeMatcher.familyPath(field),value:el.value,dirty:false});},true);
+  async function remember(el){const edit=edits.get(el);if(!edit?.dirty||writing||ResumeFillPage.isBusy?.())return;const field=ResumeFillPage.describe(el),path=ResumeMatcher.familyPath(field),value=String(el.tagName==='SELECT'?(el.value?el.selectedOptions[0]?.textContent||'':''):el.value||'').trim();if(!path||edit.path&&edit.path!==path||value===edit.value||!value)return;edit.dirty=false;
+    try{const result=await request('RF_FAMILY_LEARN',{field,value});if(result?.saved){edit.value=value;memoNotice('已记住家庭成员资料：'+ResumeMatcher.familyRoles[field.familyRole]?.[0]+' · '+field.label);} }
+    catch(e){memoNotice('家庭资料未自动保存：'+e.message+'。可使用“重新扫描并学习”核对。');}
+  }
+  for(const type of ['input','change'])document.addEventListener(type,e=>{const edit=edits.get(e.target);if(!edit||ResumeFillPage.isBusy?.()||writing||!e.isTrusted&&Date.now()-lastGesture>1500)return;edit.dirty=true;if(type==='change')void remember(e.target);},true);
+  document.addEventListener('focusout',e=>void remember(e.target),true);
 })();

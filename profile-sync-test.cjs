@@ -9,3 +9,5 @@ const group=S.apply(local,remote,p,[index('education')]);assert.deepEqual(group.
 const order={custom:local.custom,fieldAnswers:local.fieldAnswers,education:local.education,basics:{phone:'local-phone',gender:'男',ethnicity:'',name:'Local'}};assert.doesNotThrow(()=>S.apply(order,remote,p,[index('basics.ethnicity')]));
 const partial=S.plan({basics:{address:'Keep address',gender:'女'}},{basics:{address:'',gender:null}});assert.equal(partial.items.length,0);
 console.log('PASS: desktop ethnicity diff, explicit conflicts/sensitive/record groups, preserve learned answers and local-only fields, no blank clears, immutable merge and stale source/target rejection');
+const familySync=S.plan({basics:{}}, {basics:{},family:{father:{name:'Synthetic Parent'}}});
+assert.equal(familySync.items[0].sensitive,true);assert.equal(familySync.items[0].checked,false);
