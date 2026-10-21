@@ -1,0 +1,13 @@
+(() => {
+  const desktop=!!document.querySelector('aside .brand'),popup=document.body.classList.contains('popup');
+  document.body.classList.add(desktop?'desktop-ui':popup?'popup-ui':'options-ui');
+  function art(){const img=document.createElement('img');img.className='buddy-art';img.src='buddy.svg';img.alt='';img.setAttribute('aria-hidden','true');img.width=240;img.height=190;return img;}
+  function journey(links){const row=document.createElement('div');row.className='journey';row.setAttribute('aria-label','使用步骤');links.forEach(([title,href],i)=>{const el=document.createElement(href?'a':'div'),n=document.createElement('span');if(href)el.href=href;n.className='step-number';n.textContent=i+1;el.append(n,document.createTextNode(title));row.append(el);});return row;}
+  if(desktop){
+    const brand=document.querySelector('.brand');brand.replaceChildren();const mark=document.createElement('span');mark.className='brand-mark';mark.textContent='R';const name=document.createElement('span');name.textContent='ResumeFill';brand.append(mark,name);
+    document.querySelector('aside>p').textContent='你的求职小搭档';
+    const welcome=document.createElement('div');welcome.className='welcome';const text=document.createElement('div'),title=document.createElement('h2'),note=document.createElement('p');title.textContent='少填一点，多一点可能。';note.textContent='准备好一份资料，让小搭档帮你识别、匹配和填写。每一步，都由你确认。';text.append(title,note);welcome.append(text,art());document.querySelector('main>header').after(welcome);welcome.after(journey([['整理个人资料','#profile'],['连接浏览器','#extension'],['启动填表搭档','#overview']]));
+    const paths=['M4 11h6V4H4v7Zm10 9h6V9h-6v11ZM4 20h6v-5H4v5Zm10-15h6V4h-6v1Z','M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6M8 13h8M8 17h5','M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z','M8 7V4h8v3M6 7h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm3 5 3 3 3-3M12 15V7'];
+    document.querySelectorAll('nav a').forEach((a,i)=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'),path=document.createElementNS(svg.namespaceURI,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('class','icon');svg.setAttribute('aria-hidden','true');path.setAttribute('d',paths[i]||paths[0]);svg.append(path);a.prepend(svg);a.addEventListener('click',()=>{document.querySelectorAll('nav a').forEach(n=>n.removeAttribute('aria-current'));a.setAttribute('aria-current','location');});});
+  }else{const header=document.querySelector('header');header?.append(art());if(popup)header?.nextElementSibling?.after(journey([['扫描页面'],['核对匹配'],['一键填写']]));}
+})();

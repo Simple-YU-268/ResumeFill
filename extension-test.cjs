@@ -3,7 +3,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'resumefill-test-'));
  const testExtension=path.join(profile,'extension');fs.mkdirSync(testExtension);
- for(const f of fs.readdirSync(__dirname).filter(f=>/\.(js|html|css|json)$/.test(f)&&!['resume.json'].includes(f)))fs.copyFileSync(path.join(__dirname,f),path.join(testExtension,f));
+ for(const f of fs.readdirSync(__dirname).filter(f=>/\.(js|html|css|json|svg)$/.test(f)&&!['resume.json'].includes(f)))fs.copyFileSync(path.join(__dirname,f),path.join(testExtension,f));
  fs.cpSync(path.join(__dirname,'data'),path.join(testExtension,'data'),{recursive:true});
  // Open only the test copy's shadow root so Playwright can inspect the assistant.
  const inlineFile=path.join(testExtension,'inline.js');fs.writeFileSync(inlineFile,fs.readFileSync(inlineFile,'utf8').replace("mode:'closed'","mode:'open'"));

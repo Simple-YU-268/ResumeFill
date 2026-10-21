@@ -4,7 +4,7 @@
   const host=document.createElement('div');host.setAttribute('data-resumefill-assistant','');
   host.style.cssText='all:initial;position:fixed;z-index:2147483647;display:none;';
   const shadow=host.attachShadow({mode:'closed'}),style=document.createElement('style');
-  style.textContent=':host{font:14px system-ui;color:#173b38}section{box-sizing:border-box;width:340px;max-width:95vw;max-height:280px;overflow:auto;background:white;border:1px solid #92b6ad;border-radius:8px;box-shadow:0 4px 20px #0003;padding:10px}button{display:block;width:100%;text-align:left;background:#edf5f2;border:0;border-radius:5px;padding:8px;margin:5px 0;cursor:pointer;color:#173b38;font:inherit}small{display:block;color:#55736d;white-space:pre-wrap}p{margin:5px 0}';
+  style.textContent=':host{font:14px system-ui;color:#283f3c}section{box-sizing:border-box;width:340px;max-width:95vw;max-height:280px;overflow:auto;background:white;border:1px solid #a7b9ad;border-radius:16px;box-shadow:0 4px 20px #0003;padding:10px}button{display:block;width:100%;text-align:left;background:#edf2e9;border:0;border-radius:10px;padding:8px;margin:5px 0;cursor:pointer;color:#173b38;font:inherit}small{display:block;color:#55736d;white-space:pre-wrap}p{margin:5px 0}';
   const panel=document.createElement('section');panel.setAttribute('role','region');panel.setAttribute('aria-label','简历快填匹配建议');shadow.append(style,panel);document.documentElement.append(host);
   async function request(type,extra={}){const r=await chrome.runtime.sendMessage({type,...extra});if(r?.error)throw Error(r.error);return r;}
   function eligible(el){return el instanceof HTMLTextAreaElement||el instanceof HTMLInputElement&&['text','email','tel','search','url','number'].includes(el.type);}

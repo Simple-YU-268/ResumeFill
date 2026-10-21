@@ -31,3 +31,7 @@ playwright-report/
 .DS_Store
 
 desktop/ui/regions.js
+
+desktop/ui/theme.css
+desktop/ui/visual.js
+desktop/ui/buddy.svg
