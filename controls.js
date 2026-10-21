@@ -38,7 +38,8 @@
   function matchingOptions(elements,value,d){
     const available=elements.filter(enabled),numeric=!d?.manualOption&&root.ResumeMatcher?.numericOptions(value,available,{...d?.field,sourcePath:d?.sourcePath});
     if(numeric?.handled){if(numeric.hits.length>1)throw Error(numeric.reason);return numeric.hits;}
-    return available.filter(o=>optionKey(o.textContent,d)===optionKey(value,d)||norm(o.getAttribute('data-value')||o.value)===norm(value));
+    const exact=available.filter(o=>optionKey(o.textContent,d)===optionKey(value,d)||norm(o.getAttribute('data-value')||o.value)===norm(value));
+    return exact.length?exact:available.filter(o=>root.ResumeMatcher?.optionContains(o.textContent,value,d?.field));
   }
   function uniqueOption(elements,value,d){
     const matches=matchingOptions(elements,value,d);
@@ -181,7 +182,7 @@
     }else if(d.type==='select'){
       d.numericSelection=null;const o=await waitFor(()=>{guard(d);const found=matchingOptions(Array.from(d.el.options),value,d);if(found.length>1)throw Error('选项不唯一，已停止');return found[0];});guard(d);setValue(d.el,o.value);d.numericSelection={value:String(value),sourcePath:d.sourcePath,text:o.textContent};
     }else if(d.type==='combobox'){
-      d.optionConfirmed=false;d.numericSelection=null;d.beforeMenus=new Set(menus(d.el.ownerDocument));const stopWatching=watchMenus(d);try{d.el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));d.el.click();
+      d.optionConfirmed=false;d.numericSelection=null;d.beforeMenus=new Set(menus(d.el.ownerDocument));const stopWatching=watchMenus(d);try{const alreadyOpen=(d.config?.layuiSelect||d.el.getAttribute('aria-expanded')==='true'||d.el.querySelector('[aria-expanded="true"]'))&&associatedMenu(d);if(!alreadyOpen||alreadyOpen.getAttribute('aria-busy')==='true'){d.el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));d.el.click();}
       const search=d.config?.searchInputSelector?list(d.scope,d.config.searchInputSelector):d.el.matches('input')?[d.el]:list(d.el,'input');
       if(search.length>1)throw Error('搜索输入框不唯一');
       if(search[0]&&!search[0].readOnly)setValue(search[0],String(value));

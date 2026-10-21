@@ -22,6 +22,9 @@
   const optionNorm=v=>String(v??'').normalize('NFKC').toLowerCase().replace(/[\s*＊:：]/g,'').trim();
   function enumKey(field={}){const key=String(field.path||'').split('.').at(-1);if(enums[key])return key;const label=String(field.label||'');return /政治面貌|political.?status/i.test(label)?'politicalStatus':/性别|^gender$|^sex$/i.test(label)?'gender':/婚姻|marital/i.test(label)?'maritalStatus':/国籍|nationality/i.test(label)?'nationality':/民族|ethnicity/i.test(label)?'ethnicity':/学历|学位|^degree$/i.test(label)?'degree':null;}
   function canonicalOption(value,field){const normalized=optionNorm(value),key=enumKey(field);const found=key&&enums[key].find(group=>group.some(v=>optionNorm(v)===normalized));return found?optionNorm(found[0]):normalized;}
+  // Directional containment: a precise status may select an explicitly inclusive
+  // website category. An inclusive source never implies a more precise status.
+  function optionContains(option,value,field){return enumKey(field)==='politicalStatus'&&/^中共党员\(含预备党员\)$/.test(optionNorm(option))&&['中共党员','中共预备党员'].map(v=>optionNorm(v)).includes(canonicalOption(value,field));}
   const aliases = {
     'basics.name':['姓名','中文姓名','真实姓名','本人姓名','应聘者姓名','申请人姓名','name','fullname','yourname'],
     'basics.idNumber':['身份证号码','身份证号','居民身份证号码','身份证件号码','idnumber','identitynumber'],
@@ -242,6 +245,6 @@
     const skill=path.match(/^(skills\.\d+)\.name$/),category=skill&&values[skill[1]+'.category'];
     return {sourceValue:value,kind:/^basics\.(?:city|hukouAddress|nativePlace|expectedCity)$/.test(path)?'region':'exact',parts:category?[String(category),value]:value.split(/\s*[>＞→]\s*/).filter(Boolean)};
   }
-  root.ResumeMatcher={familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,numericInterval,numericOptions,allowedPath,candidatePaths};
+  root.ResumeMatcher={familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,optionContains,numericInterval,numericOptions,allowedPath,candidatePaths};
   if (typeof module!=='undefined') module.exports=root.ResumeMatcher;
 })(globalThis);
