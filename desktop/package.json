@@ -1,6 +1,6 @@
 {
   "name": "resumefill-desktop",
-  "version": "0.20.4",
+  "version": "0.20.5",
   "description": "ResumeFill dedicated application agent",
   "author": "ResumeFill",
   "main": "main.cjs",
