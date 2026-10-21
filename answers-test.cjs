@@ -15,4 +15,5 @@ assert.throws(()=>A.save(resume,[{field:{...field,label:'验证码'},value:'123'
 assert.throws(()=>A.save(resume,[{field,value:'A'},{field,value:'B'}],page));
 assert.equal(resume.fieldAnswers[0].value,'ABC-123');
 const form={...page,url:page.origin+page.page+'?formId=A&token=secret'};const formResume=A.save(resume,[{field,value:'form A'}],form);assert.equal(A.match(field,formResume,form).path,'fieldAnswers.1.value');assert.equal(A.match(field,formResume,{...form,url:page.origin+page.page+'?formId=B'}),null);assert.ok(!JSON.stringify(formResume).includes('secret'));
+const childPage={...page,frameUrl:page.origin+'/frame?formId=child-A'};const childResume=A.save(resume,[{field,value:'child answer'}],childPage);assert.equal(A.match(field,childResume,childPage).path,'fieldAnswers.1.value');assert.equal(A.match(field,childResume,{...childPage,frameUrl:page.origin+'/frame?formId=child-B'}),null);
 console.log('PASS: supplemental JSON answers, local matching, scope isolation, update without duplicates, metadata excluded, protected fields');

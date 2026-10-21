@@ -1,7 +1,7 @@
 (function(root){
   const norm=s=>String(s??'').normalize('NFKC').trim().toLowerCase().replace(/[\s*＊:：]/g,'');
   const protectedField=f=>/验证码|校验码|密码|安全问题|密保|问题[一二三123]答案|security.?question|security.?answer|recovery.?answer|一次性.*码|captcha|password|one.?time|verification.?code|\botp\b/i.test(f.label||'');
-  function identity(f,page){const formId=page.url?new URL(page.url).searchParams.get('formId'):null;return {label:String(f.label||'').trim(),section:f.section||null,recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,context:String(f.context||''),type:f.type,origin:page.origin,page:page.page,formId};}
+  function identity(f,page){const url=page.frameUrl||page.url,formId=url?new URL(url).searchParams.get('formId'):null;return {label:String(f.label||'').trim(),section:f.section||null,recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,context:String(f.context||''),type:f.type,origin:page.origin,page:page.page,formId};}
   function key(a){return JSON.stringify([norm(a.label),a.section,a.recordIndex,norm(a.context),a.type,a.origin,a.page,a.formId||null]);}
   function match(field,resume,page){
     if(protectedField(field)||field.ambiguousLabel)return null;

@@ -28,7 +28,7 @@ async function matchAI(message){
 }
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(['RF_ASSIST_DATA','RF_ASSIST_SAVE'].includes(message.type)){
-    if(sender.id!==chrome.runtime.id||!sender.tab||sender.frameId!==0||!/^https?:/.test(sender.url||'')){respond({error:'仅允许已启用的网页助手使用'});return;}
+    if(sender.id!==chrome.runtime.id||!sender.tab||new URL(sender.url||sender.tab.url).origin!==new URL(sender.tab.url).origin||!/^https?:/.test(sender.url||'')){respond({error:'仅允许已启用的网页助手使用'});return;}
     (async()=>{const {resume}=await chrome.storage.local.get('resume');if(!resume)throw Error('请先保存简历');
       if(message.type==='RF_ASSIST_DATA')return {resume};
       const f=message.field;if(!f||typeof f.label!=='string'||f.label.length>500||typeof message.value!=='string')throw Error('资料格式无效');
@@ -44,7 +44,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   matchAI(message).then(respond,e=>respond({error:e.message}));return true;
 });
 
-importScripts('agent-bridge.js');
+importScripts('page-bridge.js','agent-bridge.js');
 importScripts('desktop-bridge.js');
 
 importScripts('web-ocr-match.js','web-ocr-bridge.js');

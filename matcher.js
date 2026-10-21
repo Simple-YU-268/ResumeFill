@@ -28,9 +28,10 @@
     'basics.wechat':['微信','微信号','wechat'],
     'basics.gender':['性别','gender','sex'], 'basics.birthday':['出生日期','生日','birthday','dateofbirth'],
     'basics.website':['个人网站','个人主页','website','portfolio'],
-    'education.*.school':['学校','毕业学校','毕业院校','院校名称','学校名称','就读院校','就读学校','school','university'],
-    'education.*.major':['专业','所学专业','专业名称','major'],
+    'education.*.school':['学校','毕业学校','最高学历毕业院校','毕业院校','院校名称','学校名称','就读院校','就读学校','school','university'],
+    'education.*.major':['专业','最高学历所学专业','所学专业','专业名称','major'],
     'education.*.degree':['学历','学历层次','学位','最高学历','degree','educationlevel'],
+    'education.*.degreeName':['最高学位','学位名称'],
     'education.*.courses':['主修课程','主要课程','所学课程'],
     'education.*.ranking':['学习成绩排名','成绩排名','专业排名'],
     'education.*.gpa':['绩点','gpa'],
@@ -47,7 +48,7 @@
     'languages.*.level':['英语水平','其他外语水平','外语等级'], 'languages.*.score':['英语水平具体分数','其他外语具体分数','外语成绩'],
     'skills':['技能','专业技能','技能特长','skills'], 'summary':['自我评价','个人简介','自我介绍','summary'],
     '*.startDate':['开始时间','开始日期','项目开始时间','项目开始日期','入学时间','入职时间','startdate'],
-    '*.endDate':['结束时间','结束日期','项目结束时间','项目结束日期','毕业时间','离职时间','enddate']
+    '*.endDate':['结束时间','结束日期','项目结束时间','项目结束日期','毕业时间','最高学历毕业时间','离职时间','enddate']
   };
   const normalize = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[\s_\-:：*＊（）()]/g,'');
   function labelVariants(value){
@@ -55,7 +56,7 @@
     const parts=[raw,...Array.from(raw.matchAll(/[（(]([^（）()]+)[）)]/g),m=>m[1]),raw.replace(/[（(][^（）()]*[）)]/g,'')];
     return [...new Set(parts.map(normalize).filter(Boolean))];
   }
-  const foreignPerson=f=>/父亲|母亲|配偶|紧急联系人|家庭成员|推荐人|联系人姓名|联系人电话|联系人手机|推荐者|监护人|emergencycontact|referencecontact/i.test(normalize(f.label)+' '+normalize(f.context));
+  const foreignPerson=f=>/父亲|母亲|配偶|紧急联系人|家庭(?:主要)?成员|推荐人|联系人姓名|联系人电话|联系人手机|推荐者|监护人|emergencycontact|referencecontact/i.test(normalize(f.label)+' '+normalize(f.context));
   const protectedLabel=f=>/验证码|校验码|密码|安全问题|密保|问题[一二三123]答案|security.?question|security.?answer|recovery.?answer|一次性.*码|captcha|password|verification.?code|\botp\b/i.test(f.label||'');
   function namesFor(path){
     if(path.endsWith('.startDate'))return aliases['*.startDate'];
@@ -87,7 +88,7 @@
     // Visible labels outrank technical names/IDs. A city-* internal ID is not
     // evidence that a hukou/native-place control should receive current city.
     const sources=field.label?[field.label]:(field.tokens||[]);
-    const label=normalize(field.label),tokens=sources.flatMap(labelVariants).filter(t=>t&&!/^(?:field|cityfield|countyfield|provincefield)[a-z0-9]+$/i.test(t)&&t!=='未命名字段');
+    const label=normalize(field.label),question=/是否|有无/.test(label),tokens=sources.flatMap(labelVariants).filter(t=>t&&!/^(?:field|cityfield|countyfield|provincefield)[a-z0-9]+$/i.test(t)&&t!=='未命名字段');
     if(!tokens.length)return null;
     const context=normalize(field.context);
     const section=field.section||(/教育|学历|education/.test(context)?'education':/工作|实习|work|employment/.test(context)?'work':/项目|project/.test(context)?'projects':'');
@@ -98,12 +99,12 @@
       if(Number.isInteger(field.recordIndex)&&section&&/^(education|work|projects|languages|skills|awards|activities)\./.test(path)&&!path.startsWith(section+'.'+field.recordIndex+'.'))continue;
       if(semantic&&path!==semantic.path&&path!==semantic.path.replace(/^basics\./,''))continue;
       if(/(?:地址|籍贯|户籍|户口|省份|区县)/.test(label)&&path==='basics.city')continue;
-      if(/父亲|母亲|配偶|紧急联系人|家庭成员|推荐人/.test(label)&&path==='basics.name')continue;
+      if(/父亲|母亲|配偶|紧急联系人|家庭(?:主要)?成员|推荐人/.test(label)&&path==='basics.name')continue;
       const names=namesFor(path);
       let score=0;
       for (const name of names) for (const token of tokens) {
         const n=normalize(name);
-        score=Math.max(score,token===n?100: n.length>=3 && token.includes(n)&&!['basics.city','basics.address','basics.name'].includes(path)?78:0);
+        score=Math.max(score,token===n?100: !question && n.length>=3 && token.includes(n)&&!['basics.city','basics.address','basics.name'].includes(path)?78:0);
       }
       if (!score) continue;
       if (section && path.startsWith(section+'.')) score+=12;
@@ -182,13 +183,14 @@
     if(field.ambiguousLabel||protectedLabel(field))return [];
     const eligible=Object.keys(values).filter(p=>String(values[p]??'').trim()&&allowedPath(field,p)&&!p.startsWith('fieldAnswers.'));
     const known=infer(field);if(known)return eligible.includes(known.path)?[known.path]:[];
-    const labels=labelVariants(field.label),scored=eligible.map(path=>{
+    const labels=labelVariants(field.label),question=/是否|有无/.test(field.label||''),scored=eligible.map(path=>{
       const names=namesFor(path).length?namesFor(path):[path.split('.').at(-1)];
-      const score=Math.max(0,...labels.flatMap(label=>names.map(name=>{const n=normalize(name);if(n===label)return 100;if(n.length>=2&&(label.includes(n)||n.includes(label)))return 60;let overlap=0;for(let i=0;i<label.length-1;i++)if(n.includes(label.slice(i,i+2)))overlap++;return overlap*5;})));return {path,score};
+      const score=Math.max(0,...labels.flatMap(label=>names.map(name=>{const n=normalize(name);if(n===label)return 100;if(question)return 0;if(n.length>=2&&(label.includes(n)||n.includes(label)))return 60;let overlap=0;for(let i=0;i<label.length-1;i++)if(n.includes(label.slice(i,i+2)))overlap++;return overlap*5;})));return {path,score};
     }).sort((a,b)=>b.score-a.score);
+    const exact=scored.filter(c=>c.score===100);if(exact.length)return exact.slice(0,12).map(c=>c.path);
     const relevant=scored.filter(c=>c.score>=Math.max(1,(scored[0]?.score||0)*.5));if(relevant.length)return relevant.slice(0,12).map(c=>c.path);
     // Unknown labels may use only a small, explicitly identified record. Otherwise abstain.
-    return field.section&&Number.isInteger(field.recordIndex)&&eligible.length<=12?eligible:[];
+    return !question&&field.section&&Number.isInteger(field.recordIndex)&&eligible.length<=12?eligible:[];
   }
   function resolveField(field,values){
     if(field.recordPolicy==='uniqueRecord'){

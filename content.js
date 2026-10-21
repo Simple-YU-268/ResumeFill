@@ -44,7 +44,7 @@
       if(node.matches(cardSelector)&&!node.hasAttribute('data-resume-section'))continue;
       const detected=node.getAttribute('data-resume-section')||(/基本信息/.test(title)?'basics':/外语水平|语言能力/.test(title)?'languages':/IT技能|专业技能/.test(title)?'skills':/在校荣誉|获奖经历/.test(title)?'awards':/学生实践经验|社会实践/.test(title)?'activities':/教育|学历|education/i.test(title)?'education':/工作经历|实习经历|work experience|^(工作|实习|work|employment)$/i.test(title)?'work':/项目经历|项目经验|科研经历|project experience|projects/i.test(title)?'projects':null);
       if(title==='其他')return {section:null,recordIndex:null,context:title};
-      if(/校内活动|校园经历|社团经历|学生工作/.test(title))return {section:null,recordIndex:null,context:title,contextBlocked:true};
+      if(/校内活动|校园经历|社团经历|学生工作|家庭主要成员|家庭成员|亲属信息/.test(title))return {section:null,recordIndex:null,context:title,contextBlocked:true};
       if(detected){group=node;context=title;section=detected;break;}
     }
     let card=el.closest(cardSelector);
@@ -72,7 +72,7 @@
       if(child.matches('input,textarea,select')||child.querySelector('input,textarea,select'))break;
       if(child.matches('label,button')||!ResumeLayout.visible(child))continue;
       const title=text(child).replace(/内容缺失.*$|编辑$|添加$/g,'').trim();
-      if(/^(基本信息|外语水平|语言能力|IT技能|专业技能|在校荣誉|获奖经历|学生实践经验|社会实践|其他|最高学历|最高教育经历|教育经历|教育背景|工作经历|实习经历|项目经历|项目经验|科研经历|校内活动|校园经历|社团经历|学生工作)(?:\s|$)/.test(title)&&title.length<80)return title;
+      if(/^(基本信息|外语水平|语言能力|IT技能|专业技能|在校荣誉|获奖经历|学生实践经验|社会实践|其他|最高学历|最高教育经历|教育经历|教育背景|工作经历|实习经历|项目经历|项目经验|科研经历|家庭主要成员|家庭成员|亲属信息|校内活动|校园经历|社团经历|学生工作)(?:\s|$)/.test(title)&&title.length<80)return title;
     }
     return '';
   }
@@ -90,6 +90,7 @@
   }
   function descriptor(el,scope,config={}){
     if(el.closest('.jbs_three_layers_input_wrapper'))config={...config,referencePicker:true};
+    if(el.closest('.layui-form-select'))config={...config,type:'combobox',layuiSelect:true};
     const type=config.type||kind(el),radios=type==='radio'?(el.type==='radio'?query(scope,'input[type="radio"]').filter(r=>r.name===el.name&&r.name&&eligible(r)):shown(el,'input[type="radio"]')):null;
     return {el,scope,type,config,radios:radios?.length?radios:[el]};
   }
@@ -123,6 +124,7 @@
         const rect=el.getBoundingClientRect();
         const path=config.path?A.recordPath(config.path,s.index??0):null;
         const field={id,label,tokens:tokens.length?tokens:[linked,el.getAttribute('aria-label'),el.placeholder,el.name,el.id,el.autocomplete].filter(Boolean),...ctx,type:d.type,path,value:C.read(d),required:!!el.required||el.getAttribute('aria-required')==='true'||!!container?.classList.contains('is-required'),evidence:config.path?'站点配置':labels.length||containerLabels.length?'可见关联标签':inferred.evidence||'控件属性',options:el.tagName==='SELECT'?Array.from(el.options).map(o=>o.textContent):null};
+        if(/^(?:最高学历(?:毕业院校|所学专业|毕业时间|学习形式)?|最高学位)$/.test(label)){field.section='education';field.recordIndex=null;field.context='最高学历';field.recordPolicy='highestEducation';}
         if(d.config.referencePicker)field.matchWarning='自动遍历完整路径并核对真实选中项；歧义时停止';
         if(!field.context)field.context=structural.context||inferred.context||'';
         const rangeLabel=dateRangeLabel(el);if(rangeLabel&&!config.path&&!config.label){field.label=rangeLabel;field.tokens=[rangeLabel];field.evidence='同一时间段的起止控件';}

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "简历快填 · ResumeFill",
-  "version": "0.20.5",
+  "version": "0.20.6",
   "description": "专用填表 Agent：观察、规划、工具执行、独立回读和人工继续",
   "permissions": [
     "activeTab",

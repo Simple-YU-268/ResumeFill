@@ -1,4 +1,4 @@
-# ResumeFill Agent Windows 桌面端 0.20.5
+# ResumeFill Agent Windows 桌面端 0.20.6
 
 桌面程序内置 Electron 的 Node 运行时、本地 Agent 服务和 Chrome / Edge 扩展，无需另外安装 Node。关闭桌面端会停止其管理的服务；任务不会自动重放。默认端口 17322，与旧版手动启动的 17321 服务区分。
 
@@ -52,7 +52,7 @@ OCR 期间及确认前请勿滚动、切换页面或修改页面结构。页面�
 
 ## 开始使用
 
-1. 安装 `ResumeFill-Agent-0.20.5-Setup.exe`，打开 ResumeFill Agent。
+1. 安装 `ResumeFill-Agent-0.20.6-Setup.exe`，打开 ResumeFill Agent。
 2. 在个人资料中点击“导入资料”，导入已有文件；也可以直接在中文表单中填写并保存。桌面数据默认保存在 `%APPDATA%/resumefill-desktop/`，可通过“打开数据目录”查看。
 3. 按浏览器扩展区域中的步骤，开启 Chrome / Edge 开发者模式，加载插件目录。该版本未上架商店，不能静默安装浏览器扩展。
 4. 打开插件点击“自动发现并连接桌面端”，首次允许访问本机地址，并在桌面端点击一次“允许此浏览器连接”。之后打开插件自动发现并重连；桌面端可查看和撤销授权。旧配对码 / 文件入口保留。

@@ -4,13 +4,14 @@
   const optionKey=(v,d)=>{const n=root.ResumeMatcher?.canonicalOption?root.ResumeMatcher.canonicalOption(v,d?.field):canonical(v),level=d?.field?.regionLevel;if(d?.field?.datePart&&/^\d+[年月日]?$/.test(n))return String(parseInt(n,10));return level==='city'?n.replace(/市$/,''):level==='province'?n.replace(/省$/,''):n;};
   const visible=el=>!!el?.isConnected&&ResumeLayout.visible(el);
   const list=(scope,selector)=>Array.from(scope.querySelectorAll(selector)).filter(visible);
-  const enabled=o=>!o.disabled&&!o.hidden&&!o.closest?.('optgroup[disabled],fieldset[disabled],[aria-disabled="true"],[hidden],[inert]')&&o.getAttribute('aria-disabled')!=='true'&&!o.matches?.('.is-disabled,.ant-select-item-option-disabled,.el-select-dropdown__item--disabled')&&(o.tagName!=='OPTION'||getComputedStyle(o).display!=='none');
+  const enabled=o=>!o.disabled&&!o.hidden&&!o.closest?.('optgroup[disabled],fieldset[disabled],[aria-disabled="true"],[hidden],[inert]')&&o.getAttribute('aria-disabled')!=='true'&&!o.matches?.('.is-disabled,.ant-select-item-option-disabled,.el-select-dropdown__item--disabled,.layui-disabled')&&(o.tagName!=='OPTION'||getComputedStyle(o).display!=='none');
   function guard(d){if(d.scopeGuard&&!d.scopeGuard())throw Error('所选区块已变化，请重新选择');if(d.ocrGuard&&!d.ocrGuard())throw Error('OCR 确认后页面已变化，请重新扫描核对');if(d.signal?.aborted||d.el.disabled||d.el.getAttribute('aria-disabled')==='true'||!visible(d.el)||d.scanUrl&&location.href!==d.scanUrl)throw Error('操作已取消或字段/页面已变化');}
   const menuSelector='[role="listbox"],.ant-select-dropdown,.el-select-dropdown,.el-select__popper,.ivu-select-dropdown';
   function menus(doc){return list(doc,menuSelector).filter(n=>!n.parentElement?.closest(menuSelector));}
   function associatedMenu(d){
     const id=d.el.getAttribute('aria-controls')||d.el.getAttribute('aria-owns')||d.el.querySelector('[aria-controls],[aria-owns]')?.getAttribute('aria-controls')||d.el.querySelector('[aria-owns]')?.getAttribute('aria-owns');
     if(id){const nodes=id.split(/\s+/).map(id=>d.el.ownerDocument.getElementById(id)).filter(visible);if(nodes.length!==1)return null;return nodes[0];}
+    if(d.config?.layuiSelect){const choices=list(d.el.closest('.layui-form-select'),'dl');if(choices.length>1)throw Error('Layui 下拉列表不唯一');return choices[0]||null;}
     const choices=menus(d.el.ownerDocument);if(visible(d.menu)&&choices.includes(d.menu))return d.menu;const fresh=choices.filter(n=>!d.beforeMenus?.has(n));if(fresh.length===1)return fresh[0];if(fresh.length>1)throw Error('展开多个弹层，无法确定归属');
     if(d.menuChanges&&!d.menuChangeOverflow){const anchor=d.el.getBoundingClientRect();const changed=choices.filter(n=>d.menuChanges.has(n)&&!n.contains(d.el)&&list(n,'[role="option"],.ant-select-item-option,.el-select-dropdown__item,.ivu-select-item').length>=2&&!n.querySelector('form,input,textarea,select,[role="grid"]')&&n.querySelectorAll('a[href]').length<2).filter(n=>{const r=n.getBoundingClientRect();return Math.min(r.right,anchor.right)>Math.max(r.left,anchor.left)&&Math.min(Math.abs(r.top-anchor.bottom),Math.abs(anchor.top-r.bottom))<100;});if(changed.length>1)throw Error('多个已有弹层同时变化，无法确定归属');if(changed.length===1)return changed[0];}
     return null;
@@ -32,7 +33,7 @@
     const menu=associatedMenu(d);d.menu=menu;
     if(menu?.getAttribute('aria-busy')==='true')return [];
     if(selector){const linked=d.el.matches('[aria-controls],[aria-owns]')||d.el.querySelector('[aria-controls],[aria-owns]');return list(d.el.ownerDocument,selector).filter(n=>menu?menu.contains(n):!linked);}
-    return menu?list(menu,'[role="option"],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.ivu-select-item'):[];
+    return menu?list(menu,'[role="option"],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.ivu-select-item,dd[lay-value]'):[];
   }
   function matchingOptions(elements,value,d){
     const available=elements.filter(enabled),numeric=!d?.manualOption&&root.ResumeMatcher?.numericOptions(value,available,{...d?.field,sourcePath:d?.sourcePath});
@@ -158,6 +159,7 @@
     if(invalid(d))return {status:'invalid',error:d.el.validationMessage||'页面标记该字段无效'};
     if(d.config?.referencePicker)return referenceVerify(d,value);
     if(!equal(d,read(d),value))return {status:'mismatch',error:'值未保留或显示值与预期不一致'};
+    if(d.type==='combobox'&&d.config?.layuiSelect){const native=d.el.closest('.layui-form-select')?.previousElementSibling;if(native?.tagName!=='SELECT'||!native.value||norm(native.selectedOptions[0]?.textContent)!==norm(read(d)))return {status:'unconfirmed',error:'Layui 原生选中值与可见文本不一致'};return {status:'verified'};}
     if(d.type==='combobox'&&!d.optionConfirmed)return {status:'unconfirmed',error:'文本已有内容，但未确认选择真实选项'};
     return {status:'verified'};
   }

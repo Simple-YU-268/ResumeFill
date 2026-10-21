@@ -5,7 +5,7 @@
  async function rpc(run,action,data){const controller=new AbortController();run.controller=controller;const timer=setTimeout(()=>controller.abort(),24000);try{const r=await fetch(run.connection.base+'/v1/agent/'+action,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+run.connection.key},body:JSON.stringify(data),signal:controller.signal,credentials:'omit',redirect:'error'});const body=await r.json();if(!r.ok||!body.agent)throw Error('Agent 服务请求失败，请检查服务或重新启动任务');return body.agent;}finally{clearTimeout(timer);if(run.controller===controller)run.controller=null;}}
  async function publish(run){await chrome.storage.session.set({agentRun:{runId:run.id,tabId:run.tabId,pageKey:run.pageKey,state:run.state,error:run.error||'',running:!!run.running,updatedAt:new Date().toISOString()}});}
  async function checkPage(run){const tab=await chrome.tabs.get(run.tabId);if(tab.url!==run.url||pageKey(tab.url)!==run.pageKey)throw Error('页面范围变化，Agent 停止');}
- async function send(run,message){await checkPage(run);const r=await chrome.tabs.sendMessage(run.tabId,message);if(r?.error)throw Error(r.error);return r;}
+ async function send(run,message){await checkPage(run);const r=await ResumePageBridge.send(run.tabId,message);if(r?.error)throw Error(r.error);return r;}
  async function observe(run){
   const {resume,adapters}=await chrome.storage.local.get(['resume','adapters']);if(!resume)throw Error('没有简历');
   const snap=await send(run,{type:'RF_SCAN',adapters:adapters||{version:1,adapters:[]},counts:Object.fromEntries(['education','work','projects'].map(k=>[k,resume[k]?.length||0]))});
@@ -17,13 +17,13 @@
   if(run.cancelled)throw Error('Agent 已停止');await checkPage(run);if(!['fill_fields','verify_fields','observe_page','match_fields'].includes(call.name))throw Error('Agent 请求了未允许的工具');
   if(call.name==='observe_page')return {observation:await observe(run)};
   if(call.name==='match_fields'){
-   const fields=run.snapshot.fields.filter(f=>call.arguments.fieldIds.includes(f.id)&&!run.approved.has(f.stableId));if(!fields.length)return {matches:[]};const packet=ResumeAI.build(fields,run.values,{shareValues:false,page:run.snapshot.url});
+   const fields=run.snapshot.fields.filter(f=>call.arguments.fieldIds.includes(f.id)&&!run.approved.has(f.stableId));if(!fields.length)return {matches:[]};const packet=ResumeAI.build(fields,run.values,{shareValues:false,page:run.snapshot.frameUrl||run.snapshot.url});
    if(!packet.fields.length)return {matches:[]};const requestId=crypto.randomUUID();run.modelRequestId=requestId;try{const r=await matchAI({type:'RF_AI_MATCH',requestId,packet});return {matches:r.accepted.map(m=>({fieldId:m.fieldId,path:m.path,confidence:m.confidence,reason:m.reason}))};}finally{run.modelRequestId=null;}
   }
   const {resume,optionMappings={}}=await chrome.storage.local.get(['resume','optionMappings']),current=ResumeMatcher.flatten(resume),items=[];
   if(!Array.isArray(call.arguments.items)||call.arguments.items.length>200)throw Error('工具参数无效');
   for(const item of call.arguments.items){const f=run.snapshot.fields.find(f=>f.id===item.id),allowed=f&&run.approved.get(f.stableId);if(!allowed||allowed.path!==item.path||allowed.signature!==signature(f)||!Object.hasOwn(run.values,item.path)||current[item.path]!==run.values[item.path])throw Error('工具超出授权或简历资料已变化');
-   const ruleKey='matching-v2::'+run.snapshot.origin+run.snapshot.page+'::'+(new URL(run.snapshot.url).searchParams.get('formId')||'')+'::'+run.snapshot.fingerprint+'::'+(run.snapshot.adapter||'generic');
+   const ruleKey='matching-v2::'+run.snapshot.origin+run.snapshot.page+'::'+(new URL(run.snapshot.frameUrl||run.snapshot.url).searchParams.get('formId')||'')+'::'+run.snapshot.fingerprint+'::'+(run.snapshot.adapter||'generic');
    const mappingKey=ruleKey+'::'+JSON.stringify([f.label,f.section,f.recordIndex,f.type,f.path])+'::'+item.path+'::'+run.values[item.path];
    items.push({id:item.id,path:item.path,referenceData:ResumeMatcher.referenceData(item.path,run.values),value:optionMappings[mappingKey]||run.values[item.path]});
   }
@@ -44,7 +44,7 @@
   if(!sender.url?.startsWith(chrome.runtime.getURL(''))){respond({error:'仅扩展界面可以控制 Agent'});return;}
   (async()=>{if(message.type==='RF_AGENT_START'){if(starting)throw Error('Agent 正在启动');starting=true;try{return await start(message);}finally{starting=false;}}
    if(message.type==='RF_AGENT_STATUS'){const {agentRun}=await chrome.storage.session.get('agentRun');if(agentRun?.running&&!runs.get(agentRun.runId)?.running)return {agentRun:{...agentRun,running:false,state:{...agentRun.state,status:'interrupted',pending:null},error:'后台任务已中断，请重新扫描后启动；未自动重放工具'}};return {agentRun};}
-   const run=runs.get(message.runId);if(!run)throw Error('任务不存在或后台已重启');run.cancelled=true;run.controller?.abort();if(run.modelRequestId)requests.get(run.modelRequestId)?.abort();try{await chrome.tabs.sendMessage(run.tabId,{type:'RF_CANCEL'});}catch{}if(run.state)run.state=await rpc(run,'cancel',{sessionId:run.state.id});run.running=false;await publish(run);return {stopped:true};
+   const run=runs.get(message.runId);if(!run)throw Error('任务不存在或后台已重启');run.cancelled=true;run.controller?.abort();if(run.modelRequestId)requests.get(run.modelRequestId)?.abort();try{await ResumePageBridge.send(run.tabId,{type:'RF_CANCEL'});}catch{}if(run.state)run.state=await rpc(run,'cancel',{sessionId:run.state.id});run.running=false;await publish(run);return {stopped:true};
   })().then(respond,e=>respond({error:e.message}));return true;
  });
 })();
