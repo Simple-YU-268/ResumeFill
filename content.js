@@ -118,7 +118,7 @@
     if(el.closest('.jbs_three_layers_input_wrapper'))config={...config,referencePicker:true};
     if(el.closest('.layui-form-select'))config={...config,type:'combobox',layuiSelect:true};
     const type=config.type||kind(el),radios=type==='radio'?(el.type==='radio'?query(scope,'input[type="radio"]').filter(r=>r.name===el.name&&r.name&&eligible(r)):shown(el,'input[type="radio"]')):null;
-    return {el,scope,type,config,radios:radios?.length?radios:[el]};
+    return {el,scope,type,config,layuiNative:config.layuiSelect?el.closest('.layui-form-select')?.previousElementSibling:null,radios:radios?.length?radios:[el]};
   }
   function scan(data,counts={}){
     if(data){A.validate(data);activeAdapter=A.choose(data,location.href);}
@@ -164,7 +164,9 @@
         const approved=ocrLabels.get(el);if(field.ocrEligible&&approved&&JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)})){field.label=approved.label;field.tokens=[approved.label];field.evidence='本地 OCR（已人工确认）';d.ocrGuard=()=>{const r=el.getBoundingClientRect();return JSON.stringify(approved.viewport)===JSON.stringify(viewport())&&JSON.stringify(approved.position)===JSON.stringify({x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)});};}
         field.stableId=stableIds.get(el);field.position={x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)};
         const previous=lastDescriptors.get(el);if(previous&&previous.type===d.type&&['label','section','recordIndex','context','path','regionRole','regionLevel','datePart','datePath'].every(key=>previous.field[key]===field[key])){d.optionConfirmed=previous.optionConfirmed;d.selectedPath=previous.selectedPath;d.numericSelection=previous.numericSelection;d.sourcePath=previous.sourcePath;}
-        const entry={...d,scanUrl:location.href,field,sectionScope:s};lastDescriptors.set(el,entry);registry.set(id,entry);fields.push(field);
+        const entry={...d,scanUrl:location.href,field,sectionScope:s};
+        if(d.config.layuiSelect)entry.scopeGuard=()=>{if(selectedScope&&(!selectedScope.root.isConnected||selectedScope.url!==location.href||!selectedScope.root.contains(entry.el)||!s.scope.contains(entry.el)))return false;if(field.section==='family'){const current=familyContextFor(entry.el);return !!current&&current.familyRole===field.familyRole&&!current.familyAmbiguous;}return true;};
+        lastDescriptors.set(el,entry);registry.set(id,entry);fields.push(field);
       };
       for(const config of s.config.fields||[]){const elements=shown(s.scope,config.selector);if(elements.length!==1){sectionIssues.push({section:s.key,recordIndex:s.index,error:`字段选择器未唯一命中：${config.label||config.path}`});continue;}add(elements[0],config);}
       candidates.forEach(el=>{if(!el.parentElement?.closest('[role="combobox"],.el-select,.ant-select,[contenteditable="true"]'))add(el);});

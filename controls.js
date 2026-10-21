@@ -5,7 +5,13 @@
   const visible=el=>!!el?.isConnected&&ResumeLayout.visible(el);
   const list=(scope,selector)=>Array.from(scope.querySelectorAll(selector)).filter(visible);
   const enabled=o=>!o.disabled&&!o.hidden&&!o.closest?.('optgroup[disabled],fieldset[disabled],[aria-disabled="true"],[hidden],[inert]')&&o.getAttribute('aria-disabled')!=='true'&&!o.matches?.('.is-disabled,.ant-select-item-option-disabled,.el-select-dropdown__item--disabled,.layui-disabled')&&(o.tagName!=='OPTION'||getComputedStyle(o).display!=='none');
-  function guard(d){if(d.scopeGuard&&!d.scopeGuard())throw Error('所选区块已变化，请重新选择');if(d.ocrGuard&&!d.ocrGuard())throw Error('OCR 确认后页面已变化，请重新扫描核对');if(d.signal?.aborted||d.el.disabled||d.el.getAttribute('aria-disabled')==='true'||!visible(d.el)||d.scanUrl&&location.href!==d.scanUrl)throw Error('操作已取消或字段/页面已变化');}
+  function refreshLayui(d){
+    if(!d.config?.layuiSelect)return;
+    d.layuiNative??=d.el.closest('.layui-form-select')?.previousElementSibling;
+    const native=d.layuiNative;if(native?.tagName!=='SELECT'||!native.isConnected||!d.scope.contains(native))throw Error('下拉数据源已变化或不可用，请重新扫描');
+    if(!d.el.isConnected){const wrapper=native.nextElementSibling,inputs=wrapper?.matches('.layui-form-select')?list(wrapper,'.layui-select-title input'):[];if(inputs.length!==1)throw Error('下拉重绘后控件不唯一，请重新扫描');d.el=inputs[0];}
+  }
+  function guard(d){refreshLayui(d);if(d.scopeGuard&&!d.scopeGuard())throw Error('所选区块已变化，请重新选择');if(d.ocrGuard&&!d.ocrGuard())throw Error('OCR 确认后页面已变化，请重新扫描核对');if(d.signal?.aborted||d.el.disabled||d.layuiNative?.disabled||d.el.getAttribute('aria-disabled')==='true'||!visible(d.el)||d.scanUrl&&location.href!==d.scanUrl)throw Error('操作已取消或字段/页面已变化');}
   const menuSelector='[role="listbox"],.ant-select-dropdown,.el-select-dropdown,.el-select__popper,.ivu-select-dropdown';
   function menus(doc){return list(doc,menuSelector).filter(n=>!n.parentElement?.closest(menuSelector));}
   function associatedMenu(d){
@@ -69,6 +75,7 @@
     return await waitFor(()=>{guard(d);const found=options(d).filter(o=>Number(o.getAttribute('aria-posinset'))===index);if(found.length>1)throw Error('虚拟列表索引不唯一');const o=found[0];if(!o)return false;if(JSON.stringify([o.textContent.trim(),o.getAttribute('data-value'),enabled(o)])!==hit.state)throw Error('虚拟列表目标已变化');return o;});
   }
   function read(d){
+    refreshLayui(d);
     if(d.type==='radio'){const checked=d.radios.find(r=>r.checked);return checked?(checked.labels?.[0]?.innerText||checked.value).trim():'';}
     if(d.config?.readbackSelector){const nodes=list(d.scope,d.config.readbackSelector);if(nodes.length===1)return nodes[0].value??nodes[0].innerText;}
     if(d.el.tagName==='SELECT')return d.el.value===''?'':d.el.selectedOptions[0]?.textContent?.trim()||'';
@@ -153,6 +160,8 @@
     await waitFor(()=>{guard(d);return !refPanel(d)&&norm(read(d))===norm(hits[0].at(-1).text);});const checked=await referenceVerify(d,value);if(checked.status!=='verified')throw Error(checked.error);return {status:'filled'};
   }
   async function verify(d,value){
+    try{refreshLayui(d);}catch(e){return {status:'stale',error:e.message};}
+    if(d.layuiNative?.disabled)return {status:'stale',error:'下拉数据源已被禁用，请重新扫描'};
     if(d.scopeGuard&&!d.scopeGuard())return {status:'stale',error:'所选区块已变化'};
     if(d.ocrGuard&&!d.ocrGuard())return {status:'stale',error:'OCR 确认后页面已变化，请重新核对'};
     if(d.signal?.aborted)return {status:'failed',error:'操作已取消'};
@@ -163,6 +172,11 @@
     if(d.type==='combobox'&&d.config?.layuiSelect){const native=d.el.closest('.layui-form-select')?.previousElementSibling;if(native?.tagName!=='SELECT'||!native.value||norm(native.selectedOptions[0]?.textContent)!==norm(read(d)))return {status:'unconfirmed',error:'Layui 原生选中值与可见文本不一致'};return {status:'verified'};}
     if(d.type==='combobox'&&!d.optionConfirmed)return {status:'unconfirmed',error:'文本已有内容，但未确认选择真实选项'};
     return {status:'verified'};
+  }
+  async function settleSelection(d,value){
+    const started=Date.now();let since=0;
+    while(Date.now()-started<2600){guard(d);const result=await verify(d,value);if(result.status==='verified'){since||=Date.now();if(Date.now()-since>=900)return;}else{since=0;if(['stale','invalid','failed'].includes(result.status))throw Error(result.error);}await new Promise(r=>setTimeout(r,100));}
+    throw Error('下拉选择未稳定保留，可能被网页联动清空；请先完成上级选项后重新扫描');
   }
   async function fill(d,value,overwrite){
     guard(d);
@@ -180,7 +194,7 @@
     }else if(d.type==='radio'){
       uniqueOption(d.radios.map(r=>({value:r.value,textContent:r.labels?.[0]?.innerText||r.value,disabled:r.disabled,getAttribute:k=>r.getAttribute(k),click:()=>r.click()})),value).click();
     }else if(d.type==='select'){
-      d.numericSelection=null;const o=await waitFor(()=>{guard(d);const found=matchingOptions(Array.from(d.el.options),value,d);if(found.length>1)throw Error('选项不唯一，已停止');return found[0];});guard(d);setValue(d.el,o.value);d.numericSelection={value:String(value),sourcePath:d.sourcePath,text:o.textContent};
+      d.numericSelection=null;const o=await waitFor(()=>{guard(d);const found=matchingOptions(Array.from(d.el.options),value,d);if(found.length>1)throw Error('选项不唯一，已停止');return found[0];});guard(d);setValue(d.el,o.value);d.numericSelection={value:String(value),sourcePath:d.sourcePath,text:o.textContent};await settleSelection(d,value);
     }else if(d.type==='combobox'){
       d.optionConfirmed=false;d.numericSelection=null;d.beforeMenus=new Set(menus(d.el.ownerDocument));const stopWatching=watchMenus(d);try{const alreadyOpen=(d.config?.layuiSelect||d.el.getAttribute('aria-expanded')==='true'||d.el.querySelector('[aria-expanded="true"]'))&&associatedMenu(d);if(!alreadyOpen||alreadyOpen.getAttribute('aria-busy')==='true'){d.el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));d.el.click();}
       const search=d.config?.searchInputSelector?list(d.scope,d.config.searchInputSelector):d.el.matches('input')?[d.el]:list(d.el,'input');
@@ -190,7 +204,7 @@
       await waitFor(()=>{guard(d);return options(d,d.config?.optionsSelector).length;});
       const virtual=await virtualOption(d,value);
       const option=virtual||await waitFor(()=>{guard(d);const items=options(d,d.config?.optionsSelector).filter(enabled),signature=JSON.stringify(items.map(o=>[o.textContent,enabled(o)]));if(signature!==stamp){stamp=signature;since=Date.now();return false;}if(Date.now()-since<120)return false;const exact=matchingOptions(items,value,d);if(exact.length>1)throw Error('选项不唯一');return exact[0];});
-      guard(d);uniqueOption([option],value,d).click();d.optionConfirmed=true;d.numericSelection={value:String(value),sourcePath:d.sourcePath,text:option.textContent};
+      guard(d);uniqueOption([option],value,d).click();d.optionConfirmed=true;d.numericSelection={value:String(value),sourcePath:d.sourcePath,text:option.textContent};await settleSelection(d,value);
       }finally{stopWatching();}
     }else if(d.type==='cascader'){
       const parts=String(value).split('>').map(x=>x.trim());
