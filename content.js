@@ -203,7 +203,7 @@
   };
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message.type==='RF_CANCEL'){operationController?.abort();Promise.resolve(pendingOperation).catch(()=>{}).then(()=>respond({cancelled:true}));return true;}
-    if(!['RF_SCOPE_LIST','RF_SCOPE_SET','RF_SCAN','RF_FILL','RF_VERIFY','RF_PREPARE','RF_OCR_CONTEXT','RF_OCR_APPLY','RF_OCR_HIGHLIGHT'].includes(message.type))return;
+    if(!['RF_SCOPE_LIST','RF_SCOPE_SET','RF_SCAN','RF_LEARN_READ','RF_FILL','RF_VERIFY','RF_PREPARE','RF_OCR_CONTEXT','RF_OCR_APPLY','RF_OCR_HIGHLIGHT'].includes(message.type))return;
     if(busy){respond({error:'上一项操作尚未结束'});return;}
     busy=true;
     pendingOperation=(async()=>{
@@ -213,6 +213,10 @@
       if(message.type==='RF_OCR_HIGHLIGHT'){if(JSON.stringify(message.context)!==JSON.stringify(ocrContext())||!registry.has(message.id))throw Error('页面已变化，请重新识别');registry.get(message.id).el.animate([{outline:'3px solid #0d8b68',outlineOffset:'3px'},{outline:'3px solid transparent',outlineOffset:'3px'}],{duration:1800});return {highlighted:true};}
       if(message.type==='RF_OCR_APPLY'){if(JSON.stringify(message.context)!==JSON.stringify(ocrContext()))throw Error('页面已变化，OCR 建议失效');if(!Array.isArray(message.items)||message.items.length>200)throw Error('OCR 建议无效');for(const item of message.items){const d=registry.get(item.id);if(!d?.field.ocrEligible||typeof item.label!=='string'||!item.label.trim()||item.label.length>40||/密码|验证码|password|captcha|\botp\b/i.test(item.label))throw Error('OCR 不能覆盖现有标签或保护字段');}for(const item of message.items){const d=registry.get(item.id);ocrLabels.set(d.el,{label:item.label,position:d.field.position,viewport:viewport()});}return {approved:message.items.length};}
       if(message.type==='RF_SCAN')return scan(message.adapters,message.counts);
+      if(message.type==='RF_LEARN_READ'){
+        if(location.href!==scannedUrl)throw Error('页面已变化，请重新扫描并学习');
+        return Array.from(registry.values()).filter(d=>d.el.isConnected&&ResumeLayout.visible(d.el)&&!d.el.disabled&&!ResumeAnswers.protectedField(d.field)).map(d=>({id:d.field.id,value:C.read(d)}));
+      }
       if(message.type==='RF_PREPARE')return prepare(message.counts||{});
       if(message.type==='RF_FILL')return fill(message);
       const checked=[];for(const item of message.items){const d=registry.get(item.id);if(d){d.referenceData=item.referenceData||d.referenceData;d.sourcePath=item.path||d.sourcePath;}checked.push({id:item.id,...(d?await C.verify(d,item.value):{status:'stale'})});}return checked;

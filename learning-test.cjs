@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict');
+global.ResumeMatcher=require('./matcher.js');global.ResumeAnswers=require('./answers.js');const L=require('./learning.js');
+const page={origin:'https://form.example.test',page:'/application',url:'https://form.example.test/application',fields:[]};
+const field=(label,value,extra={})=>({label,value,type:'input',section:'basics',context:'基本信息',...extra});
+const resume={basics:{name:'Synthetic Candidate',email:'old@example.test'},education:[{school:'Old School',degree:'本科'}]};
+const snapshot={...page,fields:[field('姓名','Synthetic Candidate'),field('电子邮箱','new@example.test'),field('性别','女'),field('服装尺码','M'),field('密码','synthetic-secret'),field('最高学历毕业院校','New School',{section:'education',recordPolicy:'highestEducation'}),field('公司名称','Ambiguous',{section:'work',recordIndex:null}),field('请选择','请选择民族')]};
+const review=L.plan(resume,snapshot);assert.equal(review.items.length,4);assert.equal(review.skipped.length,3);
+const email=review.items.findIndex(i=>i.path==='basics.email'),gender=review.items.findIndex(i=>i.path==='basics.gender'),school=review.items.findIndex(i=>i.path==='education.0.school'),unknown=review.items.findIndex(i=>!i.path);
+assert.ok(email>=0&&gender>=0&&school>=0&&unknown>=0);assert.equal(review.items[email].checked,false);assert.equal(review.items[email].sensitive,true);assert.equal(review.items[school].checked,false);assert.equal(review.items[gender].checked,true);
+assert.throws(()=>L.apply(resume,review,[email]),/单独确认/);
+const learned=L.apply(resume,review,[email,gender,school,unknown],true);assert.equal(learned.basics.email,'new@example.test');assert.equal(learned.basics.gender,'女');assert.equal(learned.education[0].school,'New School');assert.equal(learned.fieldAnswers[0].value,'M');assert.equal(resume.basics.email,'old@example.test');
+assert.equal(global.ResumeAnswers.match(snapshot.fields[3],learned,page).path,'fieldAnswers.0.value');assert.equal(global.ResumeAnswers.match(snapshot.fields[3],learned,{...page,page:'/other'}),null);
+assert.throws(()=>L.apply({...resume,basics:{}},review,[gender]),/资料已变化/);
+const duplicate=L.plan(resume,{...page,fields:[field('性别','男'),field('性别','女')]});assert.equal(duplicate.items.length,0);assert.equal(duplicate.skipped.length,2);
+const newRecord=L.plan({work:[]},{...page,fields:[field('公司名称','Synthetic Co',{section:'work',recordIndex:0,context:'实习经历'}),field('工作内容','Synthetic work',{section:'work',recordIndex:0,context:'实习经历'})]});assert.equal(newRecord.items.length,2);const appended=L.apply({work:[]},newRecord,[0,1]);assert.equal(appended.work[0].company,'Synthetic Co');assert.equal(appended.work[0].description,'Synthetic work');
+const gap=L.plan({work:[]},{...page,fields:[field('公司名称','Synthetic Co',{section:'work',recordIndex:2})]});assert.throws(()=>L.apply({work:[]},gap,[0]),/序号不连续/);
+assert.equal(L.plan(resume,{...page,fields:[field('安全问题答案','secret'),field('证件号码','****1234')]}).items.length,0);
+console.log('PASS: learning diff, explicit updates/sensitive approval, scoped new answers, independent records, conflict/placeholder/protected exclusion, stale profile refusal and immutable save');

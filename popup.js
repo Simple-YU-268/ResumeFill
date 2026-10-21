@@ -27,7 +27,8 @@ function requireFormTab(tab){
   if(!Number.isInteger(tab.id))throw Error('当前标签页已失效，请重新打开插件');
   return tab;
 }
-async function scan(incremental=false){
+async function scan(incremental=false,learning=false){
+  clearLearning();
   await cancelAI();
   let tab;try{const tabs=await chrome.tabs.query({active:true,currentWindow:true});tab=requireFormTab(tabs[0]);}catch(e){clearPage();throw e;}
   const oldRows=incremental?new Map(rows.map(r=>[r.field.stableId,{path:r.select.value,verified:r.verified,label:r.field.label,section:r.field.section,index:r.field.recordIndex}])):new Map();
@@ -66,12 +67,42 @@ async function scan(incremental=false){
   [...rows].sort((a,b)=>order(a)-order(b)).forEach(r=>$('fields').append(r.row));
   $('scan').classList.remove('primary');
   summary();status(snapshot.sectionIssues.length?snapshot.sectionIssues.map(s=>`${s.section}：${s.error}`).join('\n'):'核对匹配后填写。多段经历可先补齐卡片。');
-  scheduleAutoAI(data.aiSettings);
+  if(!learning)scheduleAutoAI(data.aiSettings);
 }
 function summary(){const matched=rows.filter(r=>r.select.value&&values[r.select.value]).length,required=rows.filter(r=>r.field.required&&(!r.select.value||!values[r.select.value])).length,missing=snapshot.coverage.reduce((n,c)=>n+c.missing,0);$('summary').textContent=`${snapshot.adapter||'通用识别'} · ${rows.length} 个字段 · 有资料 ${matched} · 必填缺漏 ${required} · 待补经历 ${missing}`;}
 $('edit').onclick=()=>chrome.runtime.openOptionsPage();
 $('scan').onclick=()=>run(scan);
 $('incremental').onclick=()=>run(()=>scan(true));
+// Explicit local learning: no form writes and no model requests with captured values.
+let learningReview=null,learningChecks=[];
+const learnButton=document.createElement('button');learnButton.id='learnScan';learnButton.textContent='重新扫描并学习已填内容';$('scan').after(learnButton);
+const learnPanel=document.createElement('section');learnPanel.id='learningReview';learnPanel.className='card';learnPanel.hidden=true;$('fields').before(learnPanel);
+function clearLearning(){learningReview=null;learningChecks=[];learnPanel.hidden=true;learnPanel.replaceChildren();}
+function showLearning(review){
+  learningReview=review;learnPanel.hidden=false;
+  const title=document.createElement('h2');title.textContent=`学习预览 · ${review.items.length} 项新增或修改`;learnPanel.append(title);
+  const note=document.createElement('p');note.textContent='仅保存你勾选的内容到本地 JSON；修改项和敏感项默认不勾选。不会填写或提交网页，也不会将这些值发送给 AI。';learnPanel.append(note);
+  for(const [index,item] of review.items.entries()){
+    const row=document.createElement('div'),label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=item.checked;check.dataset.learningIndex=index;label.append(check,document.createTextNode(`${item.kind}${item.sensitive?' · 敏感资料':''}：${item.field.label} → ${item.path?pathLabel(item.path):'网站补充答案'}`));
+    const before=document.createElement('p'),after=document.createElement('p');before.textContent='原值：'+(item.oldValue||'（无）');after.textContent='网页值：'+item.value;before.style.whiteSpace=after.style.whiteSpace='pre-wrap';row.append(label,before,after);learnPanel.append(row);learningChecks.push(check);
+  }
+  if(review.skipped.length){const note=document.createElement('p');note.textContent='未学习：'+review.skipped.map(s=>s.label+'（'+s.reason+'）').join('；');learnPanel.append(note);}
+  const sensitiveLabel=document.createElement('label'),sensitiveCheck=document.createElement('input');sensitiveCheck.type='checkbox';sensitiveCheck.id='learnSensitive';sensitiveLabel.append(sensitiveCheck,document.createTextNode('我确认将勾选的敏感资料保存到本地 JSON'));learnPanel.append(sensitiveLabel);
+  const save=document.createElement('button');save.id='learnSave';save.textContent='确认保存所选学习项';save.onclick=()=>run(async()=>{
+    if(learningReview!==review)throw Error('学习预览已失效，请重新扫描');
+    const indices=learningChecks.flatMap((c,i)=>c.checked?[i]:[]);if(!indices.length)throw Error('请选择至少一项资料');
+    const [active]=await chrome.tabs.query({active:true,currentWindow:true});requireFormTab(active);if(active.id!==tabId||active.url!==snapshot.url)throw Error('当前页面已切换，请重新扫描并学习');
+    const live=await send({type:'RF_LEARN_READ'}),read=new Map(live.map(f=>[f.id,String(f.value??'').trim()]));
+    for(const i of indices)if(read.get(review.items[i].field.id)!==review.items[i].value)throw Error('网页内容已改变或字段已隐藏，请重新扫描并学习');
+    const {resume:current}=await chrome.storage.local.get('resume');
+    const updated=ResumeLearning.apply(current,review,indices,sensitiveCheck.checked),enriched=await ResumeProfile.enrich(updated);
+    const latest=await chrome.storage.local.get('resume');ResumeLearning.apply(latest.resume,review,indices,sensitiveCheck.checked);
+    await chrome.storage.local.set({resumeLearningBackup:{resume:current,createdAt:new Date().toISOString()},resume:enriched.resume});
+    await scan(false,true);status(`已学习 ${indices.length} 项并保存到本地 JSON，保留了学习前的备份。下次扫描会使用这些资料；可在管理页查看和导出。`);
+  });learnPanel.append(save);
+  const discard=document.createElement('button');discard.textContent='放弃本次学习';discard.onclick=clearLearning;learnPanel.append(discard);
+}
+learnButton.onclick=()=>run(async()=>{await scan(false,true);const review=ResumeLearning.plan(resume,snapshot);showLearning(review);status(`已读取当前可见表单，发现 ${review.items.length} 项差异。请核对后保存。`);});
 $('normalizeProfile').onclick=()=>run(async()=>{const {resume:current}=await chrome.storage.local.get('resume');if(!current)throw Error('请先保存简历');const enriched=await ResumeProfile.enrich(current);await chrome.storage.local.set({resume:enriched.resume});renderNormalization(enriched.issues);status(`已整理 ${enriched.changes.length} 项，待确认 ${enriched.issues.length} 项；原始地区保留。重新扫描可使用新增路径。`);});
 function renderNormalization(issues){const panel=$('normalization');panel.replaceChildren();for(const issue of issues){const box=document.createElement('div'),note=document.createElement('p');note.textContent=issue.path+'：'+issue.status+(issue.raw?'（'+issue.raw+'）':'');box.append(note);if(issue.status==='ambiguous'){const select=document.createElement('select'),blank=document.createElement('option');blank.value='';blank.textContent='请选择实际地区';select.append(blank);for(const c of issue.candidates){const o=document.createElement('option');o.value=c.path;o.textContent=c.path;select.append(o);}const save=document.createElement('button');save.type='button';save.textContent='确认地区层级';save.onclick=()=>run(async()=>{if(!select.value)throw Error('请选择地区');const {resume:current}=await chrome.storage.local.get('resume');const updated=ResumeProfile.confirmRegion(current,issue.path.split('.')[1],issue.raw,select.value);await chrome.storage.local.set({resume:updated});box.remove();status('已保存确认的地区层级；重新扫描使用。');});box.append(select,save);}panel.append(box);}}
 $('saveAnswers').onclick=()=>run(async()=>{

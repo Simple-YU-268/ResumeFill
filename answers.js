@@ -37,5 +37,5 @@
     }
     return out;
   }
-  root.ResumeAnswers={match,save,protectedField};if(typeof module!=='undefined')module.exports=root.ResumeAnswers;
+  root.ResumeAnswers={match,save,protectedField,identity,key};if(typeof module!=='undefined')module.exports=root.ResumeAnswers;
 })(globalThis);
