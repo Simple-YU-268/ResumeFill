@@ -57,7 +57,7 @@ async function scan(incremental=false,learning=false){
     select.value=chosen;const preview=document.createElement('input');preview.readOnly=true;preview.setAttribute('aria-label','填充值预览');
     const draft=document.createElement('textarea');draft.rows=2;draft.setAttribute('aria-label',field.label+' 补充资料');draft.maxLength=20000;
     const state={field,select,key,small,verified:!!(same&&old.verified),preview,draft,row};
-    const update=()=>{preview.value=values[select.value]||'';draft.hidden=!!preview.value||ResumeAnswers.protectedField(field);draft.placeholder=select.value?`已识别 ${select.value}，资料值为空，请补充后保存`:field.ambiguousLabel?'经历或字段归属不明确，请选择区块后重新扫描':field.contextBlocked?'此类经历尚无专用资料结构，可手动选取或保存本页补充答案':'尚未确定对应资料，请先选择已有 JSON 字段；确实缺少时再补充保存';};state.update=update;select.onchange=()=>{state.touched=true;state.verified=false;update();summary();};draft.oninput=()=>state.touched=true;update();
+    const update=()=>{preview.value=values[select.value]||'';draft.hidden=!!preview.value||ResumeAnswers.protectedField(field);draft.placeholder=select.value?`已识别 ${select.value}，插件资料值为空；桌面已填写时，请在上方检查桌面资料更新`:field.ambiguousLabel?'经历或字段归属不明确，请选择区块后重新扫描':field.contextBlocked?'此类经历尚无专用资料结构，可手动选取或保存本页补充答案':'尚未确定对应资料，请先选择已有 JSON 字段；确实缺少时再补充保存';};state.update=update;select.onchange=()=>{state.touched=true;state.verified=false;update();summary();};draft.oninput=()=>state.touched=true;update();
     right.append(select,preview,draft);row.append(left,right);$('fields').append(row);rows.push(state);
   }
   const prior=rows.filter(r=>r.verified&&r.select.value);
@@ -214,3 +214,6 @@ $('scopeList').onclick=()=>run(async()=>{if(!snapshot)await scan();const result=
 $('scopeHighlight').onclick=()=>run(()=>send({type:'RF_SCOPE_SET',id:$('scopeRoot').value,highlight:true}));
 $('scopeApply').onclick=()=>run(async()=>{await send({type:'RF_SCOPE_SET',id:$('scopeRoot').value,section:$('scopeSection').value,recordIndex:Number($('scopeIndex').value)-1});await scan();});
 $('scopeClear').onclick=()=>run(async()=>{await send({type:'RF_SCOPE_SET',clear:true});await scan();});
+
+addEventListener('resumefill-profile-sync-guard',event=>{if(agentRunning||$('scan').disabled)event.preventDefault();});
+chrome.storage.onChanged.addListener(async(changes,area)=>{if(area!=='local'||!changes.resumeSyncBackup)return;await cancelAI();clearLearning();clearPage();status('资料已更新，请重新扫描当前网页以使用新资料。');});

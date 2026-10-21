@@ -4,7 +4,7 @@
 <p align="center">少填一点，多一点可能。<br>一份个人资料，复用到不同招聘表单。</p>
 <p align="center"><a href="https://github.com/Simple-YU-268/ResumeFill/releases/latest">下载 Windows 版</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/wiki">产品 Wiki</a> · <a href="docs/wiki/Getting-Started.md">安装指南</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/issues">反馈问题</a></p>
 
-**当前版本：0.22.0** · Windows 桌面端 + Chrome / Edge 扩展 · MIT 开源
+**当前版本：0.23.0** · Windows 桌面端 + Chrome / Edge 扩展 · MIT 开源
 
 ResumeFill 是本地优先的简历填表 Agent：把个人资料整理成可视化表单与 JSON，依据招聘网页实际显示的标签、位置和经历分组匹配字段，核对后填写并回读验证。遇到陌生字段，可由 AI 提供建议；你手动填写的内容也能经过确认后学习为新资料。最终申请由你提交。
 
@@ -33,6 +33,8 @@ ResumeFill 是本地优先的简历填表 Agent：把个人资料整理成可视
 ![可视化资料编辑，内容均为示例数据](docs/images/profile-editor.png)
 
 ### 手动填过，下次少填
+
+**桌面端保存后，插件也能发现资料变化。** 0.23.0 起，连接后提示新增或不同资料；点击“检查桌面资料更新”，核对后同步所选项目即可。空缺普通字段默认勾选，已有值、敏感项和整组经历由你选择，插件学到的网站答案不会被整份覆盖。同步后重新扫描网页使用新资料。
 
 网页填完后，点击 **重新扫描并学习已填内容**。已有同义字段归入原资料，陌生字段保存为带网站、区块和经历序号的补充答案。修改项默认不选；敏感资料需单独确认。保存前再次检查网页值和本地资料，并保留一次学习前备份。
 
