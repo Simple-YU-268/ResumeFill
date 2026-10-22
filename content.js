@@ -627,7 +627,9 @@
           ? "work"
           : /^项目经历|^项目经验/.test(title)
             ? "projects"
-            : null;
+            : /^获奖经历/.test(title)
+              ? "awards"
+              : null;
     return section
       ? {
           section,
@@ -927,6 +929,15 @@
               (i < 2 ? "startDate" : "endDate");
             field.label =
               (i < 2 ? "开始日期" : "结束日期") + " · " + (i % 2 ? "月" : "年");
+          } else if (
+            field.section === "awards" &&
+            /^获奖时间$/.test(mokaLabel) &&
+            parts.length === 2 &&
+            Number.isInteger(field.recordIndex)
+          ) {
+            field.datePart = i ? "month" : "year";
+            field.datePath = "awards." + field.recordIndex + ".date";
+            field.label = "获奖日期 · " + (i ? "月" : "年");
           } else if (
             field.section === "family" &&
             /^出生年月$/.test(mokaLabel) &&

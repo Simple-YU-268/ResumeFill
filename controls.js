@@ -217,8 +217,14 @@
       ? list(
           menu,
           d.config?.mokaSelect
-            ? '[class*="sd-Select-common-item-"]'
+            ? '[class*="sd-Select-common-item-"],[class*="sd-Menu-container-"]'
             : '[role="option"],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.ivu-select-item,dd[lay-value]',
+        ).filter(
+          (node) =>
+            !d.config?.mokaSelect ||
+            node.matches('[class*="sd-Select-common-item-"]') ||
+            (!node.closest('[class*="sd-Select-common-item-"]') &&
+              !node.parentElement?.closest('[class*="sd-Menu-container-"]')),
         )
       : [];
   }

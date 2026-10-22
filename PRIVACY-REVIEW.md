@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.25.1 on 2026-10-22. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
+Reviewed for v0.25.2 on 2026-10-22. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
 
 Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
 

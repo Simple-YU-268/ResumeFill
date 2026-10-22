@@ -90,7 +90,7 @@
       if(Array.isArray(value)&&path.endsWith('.courses')&&value.every(v=>typeof v==='string')){out[path]=value.filter(v=>v.trim()).join('、');continue;}
       if (value !== null && typeof value === 'object') flatten(value,path,out);
       else if (typeof value === 'string' || typeof value === 'number') out[path]=String(value);
-      if(typeof value==='string'&&/\.(birthday|startDate|endDate)$/.test(path)&&root.ResumeProfile){const date=root.ResumeProfile.parseDate(value);if(date)for(const part of ['year','month','day'])if(date[part])out[path+'Parts.'+part]=String(Number(date[part]));}
+      if(typeof value==='string'&&(/\.(birthday|startDate|endDate)$/.test(path)||/^awards\.\d+\.date$/.test(path))&&root.ResumeProfile){const date=root.ResumeProfile.parseDate(value);if(date)for(const part of ['year','month','day'])if(date[part])out[path+'Parts.'+part]=String(Number(date[part]));}
     }
     return out;
   }
