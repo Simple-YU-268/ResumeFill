@@ -1,4 +1,4 @@
-importScripts('profile.js','matcher.js','option-match.js','answers.js','ai.js');
+importScripts('metrics.js','profile.js','matcher.js','option-match.js','answers.js','ai.js');
 const requests=new Map();
 let profileWriteQueue=Promise.resolve();
 chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
@@ -10,6 +10,7 @@ async function matchAI(message){
   const values=ResumeMatcher.flatten(resume||{});
   const optionMode=message.type==='RF_AI_OPTION';
   const packet=optionMode?ResumeOptionMatch.validate(message.packet,values):message.type==='RF_AI_TEST'?{version:1,shareValues:false,fields:[{id:'test-email-'+crypto.randomUUID(),label:'联系电子信箱',section:'basics',recordIndex:null,type:'input',options:[]}],candidates:[{path:'basics.email'}]}:ResumeAI.validatePacket(message.packet,values);
+  if(optionMode){const suggestion=ResumeOptionMatch.local(packet);if(suggestion.candidateId!==null||ResumeMatcher.numericOptions(packet.value,packet.candidates,packet).handled)return {suggestion,requestId:message.requestId,gateway:{engine:'local-rules'}};}
   const {desktopConnection}=await chrome.storage.local.get('desktopConnection');if(desktopConnection?.autoPair&&new URL(config.endpoint).origin===desktopConnection.origin)await ResumeDesktop.link();
   const savedKey=await chrome.storage.session.get('aiApiKey');const aiApiKey=ResumeAI.normalizeKey(savedKey.aiApiKey);if(new URL(config.endpoint).hostname==='openrouter.ai'&&!aiApiKey)throw Error('尚未保存 OpenRouter 会话密钥，或浏览器重启后密钥已清除；请在设置中重新保存');
   const controller=new AbortController(),requestId=message.requestId;
@@ -56,3 +57,5 @@ importScripts('page-bridge.js','agent-bridge.js');
 importScripts('desktop-bridge.js');
 
 importScripts('web-ocr-match.js','web-ocr-bridge.js');
+
+let metricQueue=Promise.resolve();chrome.runtime.onMessage.addListener((message,sender,respond)=>{if(message.type!=='RF_METRICS_RECORD')return;if(!sender.url?.startsWith(chrome.runtime.getURL(''))){respond({error:'仅允许扩展界面更新统计'});return;}metricQueue=metricQueue.catch(()=>{}).then(async()=>{const {localMetrics}=await chrome.storage.local.get('localMetrics');const next=ResumeMetrics.add(localMetrics,message.delta||{},crypto.randomUUID());await chrome.storage.local.set({localMetrics:next});return {ok:true};});metricQueue.then(respond,()=>respond({error:'本机统计未更新'}));return true;});

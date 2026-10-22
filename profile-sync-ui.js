@@ -3,7 +3,7 @@
  let review=null,working=false,generation=0;
  const controls=document.createElement('div');controls.className='actions';const check=document.createElement('button');check.id='profileSyncCheck';check.textContent='检查桌面资料更新';
  const note=document.createElement('p');note.id='profileSyncStatus';note.className='muted';note.setAttribute('role','status');
- const panel=document.createElement('div');panel.id='profileSyncReview';panel.className='card profile-sync-review';panel.hidden=true;controls.append(check);anchor.after(controls,note,panel);
+ const panel=document.createElement('div');panel.id='profileSyncReview';panel.className='card profile-sync-review';panel.hidden=true;controls.append(check);(anchor.closest('#desktopConnection')||anchor).after(controls,note,panel);
  const message=async()=>{const r=await chrome.runtime.sendMessage({type:'RF_DESKTOP_PULL'});if(r?.error)throw Error(r.error);return r.resume;};
  const guard=()=>{if(!dispatchEvent(new Event('resumefill-profile-sync-guard',{cancelable:true})))throw Error('请先保存编辑或结束正在进行的填写，再同步资料');};
  const saveGuard=async()=>{guard();const {agentRun}=await chrome.storage.session.get('agentRun');if(agentRun?.running||agentRun?.state?.status==='needs_input')throw Error('请结束或停止当前 Agent，再同步资料');};

@@ -6,9 +6,10 @@ class AgentEngine{
  observation(o){
   if(!o||typeof o.pageKey!=='string'||o.pageKey.length>2000||!Array.isArray(o.fields)||o.fields.length>200||!Array.isArray(o.candidatePaths)||o.candidatePaths.length>500||!Array.isArray(o.bindings))throw Error('观察数据无效');
   const u=new URL(o.pageKey);if(!['http:','https:'].includes(u.protocol)||[...u.searchParams.keys()].some(k=>k!=='formId')||u.hash||u.username||u.password)throw Error('页面范围无效');
-  const fields=o.fields.map(f=>{if(!f||typeof f.id!=='string'||typeof f.stableId!=='string'||typeof f.label!=='string')throw Error('字段身份无效');return {id:f.id,stableId:f.stableId,label:f.label.slice(0,200),section:f.section||null,recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,type:f.type||'input',required:!!f.required,ambiguousLabel:!!f.ambiguousLabel};});
+  const fields=o.fields.map(f=>{if(!f||typeof f.id!=='string'||typeof f.stableId!=='string'||typeof f.label!=='string')throw Error('字段身份无效');return {id:f.id,stableId:f.stableId,label:f.label.slice(0,200),section:f.section||null,recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,type:f.type||'input',required:!!f.required,ambiguousLabel:!!f.ambiguousLabel,contextBlocked:!!f.contextBlocked,familyRole:f.familyRole,familyAmbiguous:!!f.familyAmbiguous,candidatePaths:Array.isArray(f.candidatePaths)?f.candidatePaths:[]};});
   if(new Set(fields.map(f=>f.id)).size!==fields.length||new Set(fields.map(f=>f.stableId)).size!==fields.length)throw Error('重复字段身份');
   const paths=[...new Set(o.candidatePaths)];if(paths.some(p=>typeof p!=='string'||p.length>200||p.split('.').some(s=>['__proto__','prototype','constructor'].includes(s))))throw Error('资料路径无效');
+  for(const f of fields){if(f.candidatePaths.length>48||f.candidatePaths.some(p=>!paths.includes(p)||!require('../matcher.js').allowedPath(f,p)))throw Error('字段候选范围无效');}
   const bound=new Set(),bindings=o.bindings.map(b=>{const f=fields.find(f=>f.id===b.id);if(!f||!paths.includes(b.path)||bound.has(b.id)||AI.protectedField(f))throw Error('未授权或受保护字段');bound.add(b.id);return {id:b.id,path:b.path,stableId:f.stableId,signature:JSON.stringify([f.label,f.section,f.recordIndex,f.type])};});
   return {pageKey:o.pageKey,fields,candidatePaths:paths,bindings};
  }
@@ -31,7 +32,7 @@ class AgentEngine{
   if(s.phase==='finish'){
    if(s.approved.some(b=>s.results[b.stableId]?.status!=='verified')){this.review(s,'部分字段未通过回读，已有内容不会被覆盖，请人工处理后继续');return;}
    const unbound=s.observation.fields.filter(f=>!s.approved.some(b=>b.stableId===f.stableId));
-   if(unbound.length&&this.modelEnabled&&!s.matched){s.matched=true;const fieldIds=unbound.filter(f=>!f.ambiguousLabel).map(f=>f.id);if(fieldIds.length){this.issue(s,'match_fields',{fieldIds});return;}}
+   if(unbound.length&&this.modelEnabled&&!s.matched){s.matched=true;const fieldIds=unbound.filter(f=>!f.ambiguousLabel&&!f.contextBlocked&&!AI.protectedField(f)&&f.candidatePaths.length).map(f=>f.id);if(fieldIds.length){this.issue(s,'match_fields',{fieldIds});return;}}
    if(unbound.length){this.review(s,'仍有新增、缺少资料或未核对的字段，请补充并选择对应路径后继续');return;}
    s.status='completed';s.reason='当前授权字段已独立回读一致；未提交申请';this.log(s,'completed');
   }

@@ -87,7 +87,7 @@
       }
       const path = prefix ? `${prefix}.${key}` : key;
       if(/^family\.[^.]+$/.test(prefix)&&['IDnmber','IDnumber','IDNumber'].includes(key)&&!Object.hasOwn(data,'idNumber')&&typeof value==='string')out[prefix+'.idNumber']=value;
-      if(Array.isArray(value)&&path.endsWith('.courses')&&value.every(v=>typeof v==='string'))out[path]=value.filter(v=>v.trim()).join('、');
+      if(Array.isArray(value)&&path.endsWith('.courses')&&value.every(v=>typeof v==='string')){out[path]=value.filter(v=>v.trim()).join('、');continue;}
       if (value !== null && typeof value === 'object') flatten(value,path,out);
       else if (typeof value === 'string' || typeof value === 'number') out[path]=String(value);
       if(typeof value==='string'&&/\.(birthday|startDate|endDate)$/.test(path)&&root.ResumeProfile){const date=root.ResumeProfile.parseDate(value);if(date)for(const part of ['year','month','day'])if(date[part])out[path+'Parts.'+part]=String(Number(date[part]));}
@@ -95,7 +95,7 @@
     return out;
   }
   function match(field, values) {
-    if(isFamilyField(field)){const path=familyPath(field);return path&&Object.hasOwn(values,path)?{path,score:100}:null;}
+    if(isFamilyField(field)){const path=familyPath(field);return path&&Object.hasOwn(values,path)&&String(values[path]).trim()?{path,score:100}:null;}
     field=resolveField(field,values);if(!field)return null;
     if(/^其他(学校|专业)$/.test(field.label||''))return null;
     if(field.ambiguousLabel||field.contextBlocked)return null;
@@ -193,7 +193,7 @@
     return {handled:true,hits,reason:hits.length>1?'数值区间边界重叠，请人工选择':hits.length?'唯一同单位区间':'没有同单位的明确区间，请人工选择'};
   }
   function allowedPath(field,path){
-    if(isFamilyField(field))return !!familyPath(field)&&path===familyPath(field);
+    if(isFamilyField(field)){const memberPath=familyPath(field);return !!memberPath&&path===memberPath;}
     if(path.startsWith('family.'))return false;
     if(field.contextBlocked||protectedLabel(field)||foreignPerson(field)&&path.startsWith('basics.')&&path!==infer(field)?.path)return false;
     const section=field.section;if(!['basics',...recordSections].includes(section))return true;

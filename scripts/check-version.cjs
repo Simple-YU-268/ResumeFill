@@ -4,7 +4,9 @@ const read=p=>require(path.join(root,p));
 const versions={
  'package.json':read('package.json').version,
  'desktop/package.json':read('desktop/package.json').version,
- 'manifest.json':read('manifest.json').version
+ 'manifest.json':read('manifest.json').version,
+ 'package-lock.json':read('package-lock.json').version,
+ 'desktop/package-lock.json':read('desktop/package-lock.json').version
 };
 const unique=new Set(Object.values(versions));
 assert.equal(unique.size,1,'version drift: '+JSON.stringify(versions));

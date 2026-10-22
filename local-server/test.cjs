@@ -36,7 +36,7 @@ const option={kind:'options',version:1,fieldId:'f2',label:'学历',path:'educati
   await post(base+'/v1/match-fields',packet);assert.equal(calls,2,'cached request skips upstream');
   const chosen=await (await post(base+'/v1/match-options',option)).json();assert.equal(chosen.candidateId,'a');
  }finally{await proxy.close();}
- const bad=createGateway({port:0,token,upstream:{enabled:true,endpoint:endpoint+'/bad',model:'mock'}});try{base='http://127.0.0.1:'+(await bad.listen()).port;assert.equal((await post(base+'/v1/match-fields',packet)).status,400);}finally{await bad.close();}
+ const bad=createGateway({port:0,token,upstream:{enabled:true,endpoint:endpoint+'/bad',model:'mock'}});try{base='http://127.0.0.1:'+(await bad.listen()).port;const response=await post(base+'/v1/match-fields',packet);assert.equal(response.status,200);assert.equal((await response.json()).matches.length,0);}finally{await bad.close();}
  const slow=createGateway({port:0,token,timeoutMs:150,upstream:{enabled:true,endpoint:endpoint+'/hang',model:'mock'}});try{base='http://127.0.0.1:'+(await slow.listen()).port;assert.equal((await post(base+'/v1/match-fields',packet)).status,504);await new Promise(r=>setTimeout(r,50));assert.equal(hangClosed,true);}finally{await slow.close();await new Promise(r=>upstream.close(r));upstream.closeAllConnections();}
  console.log('PASS: loopback gateway authentication/origin/host, local matching, options, cache, compatible endpoint, body limits, upstream isolation/retry, response validation, timeout abort');
 let outstanding='p'.repeat(64);

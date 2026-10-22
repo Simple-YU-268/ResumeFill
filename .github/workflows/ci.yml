@@ -16,9 +16,11 @@ jobs:
       - run: npm ci
       - run: npm run version:check
       - run: npm run privacy
-      - run: npm test
       - run: npm --prefix desktop ci
       - run: npm --prefix desktop run prepare:resources
+      - run: npm test
+      - run: npm run release:check
+      - run: npm run format:check
       - run: npm --prefix desktop test
       - run: node desktop/extension-test.cjs
       - run: node desktop/auto-pair-browser-test.cjs

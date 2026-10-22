@@ -21,13 +21,14 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   if(!id)throw Error('Extension not installed');
   const errors=[];context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
   const options=await context.newPage();await options.goto(`chrome-extension://${id}/options.html`);
+  await options.locator('[data-profile-path="basics.name"]').waitFor();assert.equal(await options.locator('#json').isVisible(),false);await options.locator('[data-profile-path="basics.name"]').fill('Synthetic visual editor');await options.locator('#save').click();await options.locator('#status').filter({hasText:'已保存到本地'}).waitFor();assert.equal((await options.evaluate(()=>chrome.storage.local.get('resume'))).resume.basics.name,'Synthetic visual editor');
   // Existing manual-AI workflow remains independently testable with proactive mode off.
   await options.evaluate(()=>chrome.storage.local.set({autoAIEnabled:false}));
   const resume={basics:{name:'界面测试',email:'ui@example.com',gender:'女',city:'南京',region:'江苏省 > 南京市'},education:[{school:'UI 学校 A',major:'专业 A',degree:'本科',startDate:'2020-09',endDate:'2024-07'},{school:'UI 学校 B',major:'专业 B',degree:'硕士',startDate:'2024-09',endDate:'2026-10'}]};
   resume.basics.hukouAddress='南京鼓楼';resume.basics.birthday='2000年2月29日';
-  await options.locator('#json').fill(JSON.stringify(resume));await options.locator('#save').click();await options.locator('#status').filter({hasText:'已保存到本地'}).waitFor();
+  await options.locator('#json').evaluate(el=>el.closest('details').open=true);await options.locator('#json').fill(JSON.stringify(resume));await options.locator('#save').click();await options.locator('#status').filter({hasText:'已保存到本地'}).waitFor();
   const enriched=await options.evaluate(async()=>(await chrome.storage.local.get('resume')).resume);assert.equal(enriched.basics.hukou.province,'江苏省');assert.equal(enriched.basics.hukou.county,'鼓楼区');assert.equal(enriched.basics.hukouAddress,'南京鼓楼');assert.equal(enriched.basics.birthday,'2000-02-29');
-  await options.locator('#demoAdapters').click();await options.locator('#saveAdapters').click();await options.locator('#status').filter({hasText:'站点规则已保存'}).waitFor();
+  await options.locator('#demoAdapters').evaluate(el=>el.closest('details').open=true);await options.locator('#demoAdapters').click();await options.locator('#saveAdapters').click();await options.locator('#status').filter({hasText:'站点规则已保存'}).waitFor();
   const target=await context.newPage();await target.goto(`http://127.0.0.1:${server.address().port}/demo-advanced.html`);
   const popup=await context.newPage();await popup.goto(`chrome-extension://${id}/popup.html`);
   // Advanced tools are grouped in a collapsed section in the 0.16 UI; open once for real clicks.

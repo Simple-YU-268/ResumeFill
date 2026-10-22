@@ -39,3 +39,10 @@ desktop/ui/buddy.svg
 # Reviewed synthetic product screenshots only; all other raster images stay private.
 !docs/images/desktop-overview.png
 !docs/images/profile-editor.png
+
+# Prepared copies of shared profile editor sources
+desktop/ui/profile-editor.js
+desktop/ui/structured-fields.js
+desktop/ui/profile-editor.css
+
+desktop/ui/metrics.js

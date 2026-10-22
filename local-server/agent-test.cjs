@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');const {AgentEngine}=require('./agent.cjs');
-const base={pageKey:'http://fixture.test/form?formId=a',fields:[{id:'1:f1',stableId:'n1',label:'姓名',section:'basics',type:'input',required:true}],candidatePaths:['basics.name'],bindings:[{id:'1:f1',path:'basics.name'}]};
+const base={pageKey:'http://fixture.test/form?formId=a',fields:[{id:'1:f1',stableId:'n1',label:'姓名',section:'basics',type:'input',required:true,candidatePaths:['basics.name']}],candidatePaths:['basics.name'],bindings:[{id:'1:f1',path:'basics.name'}]};
 const engine=new AgentEngine();let s=engine.create({observation:base});assert.equal(s.pending.name,'verify_fields');
 const reply=(statuses)=>{const callId=s.pending.id;s=engine.result(s.id,{callId,result:{results:statuses.map(([id,status])=>({id,status}))}});};
 reply([['1:f1','mismatch']]);assert.equal(s.pending.name,'fill_fields');const firstCall=s.pending.id;const firstResult={callId:firstCall,result:{results:[{id:'1:f1',status:'verified'}]}};s=engine.result(s.id,firstResult);assert.equal(s.pending.name,'verify_fields');assert.equal(engine.result(s.id,firstResult).pending.id,s.pending.id,'duplicate receipt does not repeat action');assert.throws(()=>engine.result(s.id,{...firstResult,result:{results:[]}}));

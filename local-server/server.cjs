@@ -1,7 +1,7 @@
 const http=require('node:http'),crypto=require('node:crypto');
 const AI=require('../ai.js'),Matcher=require('../matcher.js'),Options=require('../option-match.js');
 const {AgentEngine}=require('./agent.cjs');
-const VERSION='0.16.0';
+const VERSION=require('../package.json').version;
 const fail=(message,status,code)=>Object.assign(Error(message),{status,code});
 function createGateway(config,{fetchImpl=fetch}={}){
  if(typeof config.token!=='string'||config.token.length<32)throw Error('本地访问令牌至少 32 字符，请先运行 setup.cjs');
@@ -15,7 +15,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
  const originAllowed=o=>!o||/^chrome-extension:\/\/[a-p]{32}$/.test(o)&&(!allowed.length||allowed.includes(o.split('://')[1]));
  const auth=req=>{const provided=String(req.headers.authorization||''),expected='Bearer '+config.token;const a=Buffer.from(provided),b=Buffer.from(expected);return a.length===b.length&&crypto.timingSafeEqual(a,b)||typeof config.sessionAuth==='function'&&provided.startsWith('Bearer ')&&config.sessionAuth(provided.slice(7),req.headers.origin)===true;};
  const send=(res,status,data)=>{if(res.destroyed||res.writableEnded)return;res.writeHead(status,{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
- async function body(req,limit=200000){return await new Promise((resolve,reject)=>{let data='',bytes=0;req.setEncoding('utf8');req.on('data',chunk=>{bytes+=Buffer.byteLength(chunk);if(bytes>limit){data='';reject(fail('请求过大',413,'RF_BODY_TOO_LARGE'));return;}data+=chunk;});req.on('end',()=>{try{resolve(JSON.parse(data));}catch{reject(fail('请求不是有效 JSON',400,'RF_JSON_INVALID'));}});req.on('error',reject);});}
+ async function body(req,limit=200000){return await new Promise((resolve,reject)=>{let data='',bytes=0,overflow=false;req.setEncoding('utf8');req.on('data',chunk=>{if(overflow)return;bytes+=Buffer.byteLength(chunk);if(bytes>limit){overflow=true;data='';reject(fail('请求过大',413,'RF_BODY_TOO_LARGE'));return;}data+=chunk;});req.on('end',()=>{if(overflow)return;try{resolve(JSON.parse(data));}catch{reject(fail('请求不是有效 JSON',400,'RF_JSON_INVALID'));}});req.on('error',reject);});}
  function fieldPacket(p){if(!p||p.version!==1||!Array.isArray(p.fields)||!Array.isArray(p.candidates))throw fail('字段请求结构无效',400,'RF_PACKET_INVALID');const values=Object.fromEntries(p.candidates.map(c=>[c.path,p.shareValues?c.value:'present']));AI.validatePacket(p,values);if(p.candidates.some(c=>!/^([\w\u4e00-\u9fff-]+\.)*[\w\u4e00-\u9fff-]+$/.test(c.path)||c.path.split('.').some(s=>['__proto__','constructor','prototype'].includes(s))))throw fail('候选路径无效',400,'RF_PACKET_INVALID');return p;}
  async function upstreamCall(kind,packet,signal){
   const modelBody=kind==='fields'?AI.requestBody(upstream,packet):{...AI.requestOptions(upstream),model:upstream.model,messages:[{role:'system',content:Options.system},{role:'user',content:JSON.stringify(packet)}],stream:false,...upstream.jsonMode?{response_format:{type:'json_object'}}:{}};
@@ -62,14 +62,15 @@ function createGateway(config,{fetchImpl=fetch}={}){
    let packet=input,kind=req.url==='/v1/match-options'?'options':'fields';
    if(req.url==='/v1/chat/completions'){if(!Array.isArray(input.messages)||input.messages.length!==2||input.messages[1]?.role!=='user'||typeof input.messages[1]?.content!=='string')throw Error('仅支持 ResumeFill 匹配协议');try{packet=JSON.parse(input.messages[1].content);}catch{throw Error('匹配数据无效');}kind=packet.kind==='options'?'options':'fields';}
    if(kind==='fields')fieldPacket(packet);else Options.validate(packet);
+   const localOption=kind==='options'?Options.local(packet):null;const useLocal=!!localOption&&(localOption.candidateId!==null||Matcher.numericOptions(packet.value,packet.candidates,packet).handled);
    const cacheKey=crypto.createHash('sha256').update(JSON.stringify({kind,packet,endpoint:upstream?.endpoint,model:upstream?.model})).digest('hex');const cached=cache.get(cacheKey);let result,cacheHit=false;
    if(cached&&Date.now()-cached.at<ttl){result=cached.result;cacheHit=true;}else{
-    if(upstream)result=await upstreamCall(kind,packet,controller.signal);
+    if(useLocal)result=localOption;else if(upstream)result=await upstreamCall(kind,packet,controller.signal);
     else if(kind==='options')result=Options.local(packet);
     else{const values=Object.fromEntries(packet.candidates.map(c=>[c.path,'present']));result={matches:packet.fields.flatMap(f=>{const m=Matcher.match(f,values);return m?[{fieldId:f.id,path:m.path,confidence:1,reason:'本地唯一规则匹配，未调用模型'}]:[]})};}
     if(controller.signal.aborted)throw fail('请求已取消',400,'RF_CANCELLED');if(maxCache&&ttl){cache.delete(cacheKey);cache.set(cacheKey,{at:Date.now(),result});while(cache.size>maxCache)cache.delete(cache.keys().next().value);}
    }
-   const gateway={engine:upstream?'upstream':'local-rules',cacheHit,version};send(res,200,req.url==='/v1/chat/completions'?{model:upstream?.model||'resumefill-local',choices:[{message:{role:'assistant',content:JSON.stringify(result)}}],gateway}:{...result,gateway});
+   const gateway={engine:upstream&&!useLocal?'upstream':'local-rules',cacheHit,version};send(res,200,req.url==='/v1/chat/completions'?{model:upstream?.model||'resumefill-local',choices:[{message:{role:'assistant',content:JSON.stringify(result)}}],gateway}:{...result,gateway});
   }catch(e){send(res,controller.signal.aborted?504:(e.status||400),{error:controller.signal.aborted?'本地请求已取消或超时':webOCR?String(e.message).slice(0,120):(/上游/.test(e.message)?e.message:'匹配请求无效或无法完成'),code:controller.signal.aborted?'RF_CANCELLED':e.code||'RF_REQUEST_INVALID'});}
   finally{clearTimeout(timer);active--;}
  });

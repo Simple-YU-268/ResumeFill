@@ -1,0 +1,20 @@
+{
+  "version": "0.25.0",
+  "date": "2026-10-22",
+  "fixtures": "synthetic",
+  "unitGroups": { "status": "passed", "count": 12 },
+  "browserGroups": { "status": "passed", "count": 22 },
+  "desktopUnitAndRendererGroups": { "status": "passed", "count": 6 },
+  "desktopExtensionIntegrationGroups": { "status": "passed", "count": 3 },
+  "canvasLocalOCR": { "status": "passed", "cloudOCR": false },
+  "aiBrowserProtocol": { "status": "passed", "provider": "local-mock", "valuesSent": false, "verified": 4 },
+  "privacySourceAndArchive": { "status": "passed", "checked": 1065, "privateReferenceCompared": true },
+  "runtimeMatchesSource": { "status": "passed" },
+  "staleResourceCleanup": { "status": "passed" },
+  "electronNativeWindowGroups": { "status": "skipped", "count": 4, "reason": "Electron process could not launch in this environment; separate retry also failed" },
+  "actualRecruitingPage": { "status": "not-verified" },
+  "actualCloudModel": { "status": "not-verified" },
+  "storeSubmission": { "status": "not-submitted" },
+  "codeSigning": { "status": "unsigned" },
+  "formalRelease": { "status": "not-published" }
+}

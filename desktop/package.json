@@ -1,6 +1,6 @@
 {
   "name": "resumefill-desktop",
-  "version": "0.24.3",
+  "version": "0.25.0",
   "description": "ResumeFill dedicated application agent",
   "author": "ResumeFill",
   "main": "main.cjs",
@@ -41,7 +41,8 @@
       "pdf-service.cjs",
       "pdf-worker.cjs",
       "web-ocr.cjs",
-      "web-ocr-worker.cjs"
+      "web-ocr-worker.cjs",
+      "statistics.cjs"
     ],
     "extraResources": [
       {

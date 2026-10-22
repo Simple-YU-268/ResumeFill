@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.23.0 on 2026-10-21. Earlier reviews: v0.22.0, v0.18.0 and v0.12.0.
+Reviewed for v0.25.0 on 2026-10-22. Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
 
 The desktop-to-extension difference preview stays on the local authenticated connection. No profile values are sent to AI by this flow. Only selected changes are applied; website-learned answers and local-only fields are preserved, and a single pre-sync profile backup is stored in the extension's trusted local storage. Tests use synthetic profiles and isolated browser directories.
 
@@ -34,3 +34,14 @@ For the local review, the scanner was also given an external private reference f
 These checks supplement source and staged-diff review. Pattern matching cannot prove the absence of every possible personal fact or credential. Contributors must rerun the checks and inspect outgoing changes before publishing.
 
 Webpage OCR screenshots are sent only to the authenticated local desktop endpoint on explicit user action, processed in memory, and not included in Git, logs or release assets. The screenshot is not sent to an external model. Input-region masking reduces OCR of existing form values; it is not a complete redaction of all personal content visible on the page.
+
+## 0.24–0.25 additional boundaries
+
+- Family information, including family.father.idNumber, remains local. Automatic family learning is opt-in, off by default; uncertain relationships, masked identifiers and conflicts are not silently saved. All family synchronization requires sensitive-item review.
+- AI dropdown matching requires user value-sharing consent and now rejects identity numbers, bank accounts and private contact fields. Local unique matches and numeric ambiguity decisions do not call the model. Field matching still excludes values by default; bounded basic candidate expansion sends paths only.
+- Web OCR reuses one local child process, retains language models in memory, and disposes it after five idle minutes, cancellation, error or shutdown. Screenshots are processed in memory and are not logged or stored. No OCR cloud service is used.
+- Aggregate statistics contain counters only; no field labels, values, page addresses or prompts. Extension counters stay in trusted local storage; desktop aggregates them over the authenticated loopback connection and stores local counter snapshots. No external telemetry is sent.
+- Corrupt settings are backed up locally before creating safe defaults; model keys are cleared and old automatic grants are not copied into the replacement configuration.
+- Publication scanning covers two-character Chinese names, family identities, redacted finding paths and vendor archive content; any archive read failure fails the gate. Prepared resource directories are recreated and executable/style references are verified.
+
+This is a code and synthetic-fixture review, not evidence that the current live application page or a real model provider passed end-to-end verification.

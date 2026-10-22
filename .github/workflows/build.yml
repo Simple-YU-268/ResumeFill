@@ -16,6 +16,9 @@ jobs:
       - run: npm run version:check
       - run: npm run privacy
       - run: npm --prefix desktop ci
+      - run: npm --prefix desktop run prepare:resources
+      - run: npm run release:check
+      - run: npm test
       - run: npm run build
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false

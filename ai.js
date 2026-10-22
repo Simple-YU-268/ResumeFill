@@ -16,12 +16,12 @@
     const http=Number(known.match(/^RF_AGENT_HTTP_(\d{3})$/)?.[1]||text.match(/HTTP\s+(\d{3})/i)?.[1]);
     if([401,402,403,404,429,500,502,503,504].includes(http))return {code:'RF_AGENT_HTTP_'+http,message:(labels[tool]||'工具')+'失败：'+httpError(http)};
     const code=/^RF_AGENT_(TIMEOUT|PAGE_CHANGED|CANDIDATES|CONNECTION)$/.test(known)?known:/超时|取消|AbortError/.test(text+' '+error?.name)?'RF_AGENT_TIMEOUT':/页面.*变|字段.*变|已失效|控件/.test(text)?'RF_AGENT_PAGE_CHANGED':/候选|JSON|协议|校验/.test(text)?'RF_AGENT_CANDIDATES':'RF_AGENT_CONNECTION';
-    const reasons={RF_AGENT_TIMEOUT:'请求超时或取消，请重试；模型请求最多等待 25 秒',RF_AGENT_PAGE_CHANGED:'页面或字段已变化，请重新扫描后继续',RF_AGENT_CANDIDATES:'候选资料或模型响应未通过校验，请检查资料和模型兼容性',RF_AGENT_CONNECTION:'服务连接或工具调用失败，请检查桌面连接与“保存并测试模型”结果'};
+    const reasons={RF_AGENT_TIMEOUT:'请求超时或取消，请重试；扩展请求最多等待 25 秒，本机网关模型默认 20 秒',RF_AGENT_PAGE_CHANGED:'页面或字段已变化，请重新扫描后继续',RF_AGENT_CANDIDATES:'候选资料或模型响应未通过校验，请检查资料和模型兼容性',RF_AGENT_CONNECTION:'服务连接或工具调用失败，请检查桌面连接与“保存并测试模型”结果'};
     return {code,message:(labels[tool]||'工具')+'失败：'+reasons[code]};
   }
   function settings(data){
     if(!data?.enabled)return {enabled:false};
-    const url=new URL(String(data.endpoint||''));
+    let url;try{url=new URL(String(data.endpoint||''));}catch{throw Error('模型接口地址无效，请填写完整的 HTTPS 地址或本机服务地址');}
     if(url.username||url.password||url.search||url.hash)throw Error('AI 地址不能包含账号、查询参数或片段');
     const local=['127.0.0.1','localhost','[::1]'].includes(url.hostname);
     if(url.protocol!=='https:'&&!(url.protocol==='http:'&&local))throw Error('使用 HTTPS 地址，或本机 localhost/127.0.0.1 的 HTTP 服务');
@@ -30,7 +30,7 @@
     if(!cleanPath||/^\/(?:api\/)?v1$/.test(cleanPath))url.pathname=(cleanPath||(['api.openai.com','api.moonshot.cn','api.moonshot.ai'].includes(url.hostname)?'/v1':''))+'/chat/completions';
     if(/\/(responses|messages)$/.test(cleanPath))throw Error('当前仅支持 Chat Completions 接口，请使用 /v1/chat/completions 地址');
     if(!String(data.model||'').trim()||String(data.model).length>150)throw Error('请填写服务提供方支持的模型 ID');
-    return {enabled:true,endpoint:url.href,model:String(data.model).trim(),jsonMode:!!data.jsonMode,originPattern:url.protocol+'//'+url.hostname+'/*'};
+    return {enabled:true,endpoint:url.href,model:String(data.model).trim(),jsonMode:!!data.jsonMode,...['disabled','default'].includes(data.thinkingMode)?{thinkingMode:data.thinkingMode}:{},originPattern:url.protocol+'//'+url.hostname+'/*'};
   }
   function reviewable(row,values){return !row.verified&&!row.aiLocked&&!row.touched&&!row.draft?.value?.trim()&&(!row.select.value||!values[row.select.value]||row.aiReview===true);}
   function build(fields,values,{shareValues=false,page}={}){
@@ -39,7 +39,9 @@
     const necessary=new Set(chosen.flatMap(f=>f.candidatePaths));
     const candidates=Object.entries(values).filter(([p])=>necessary.has(p)).map(([path,value])=>shareValues?{path,value:String(value).slice(0,1200)}:{path});
     if(candidates.length>400)throw Error('简历字段超过 400 个，请精简后匹配');
-    const packet={version:1,shareValues:!!shareValues,fields:chosen.map(f=>({id:f.id,stableId:f.stableId||f.id,label:String(f.label).slice(0,160),section:f.section||null,...f.section==='family'?{familyRole:f.familyRole,familyAmbiguous:!!f.familyAmbiguous}:{},recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,...Object.fromEntries(['recordPolicy','datePart','datePath','regionRole','regionLevel','contextBlocked','ambiguousLabel'].filter(k=>f[k]!==undefined).map(k=>[k,f[k]])),candidatePaths:f.candidatePaths,type:f.type,required:!!f.required,options:(f.options||[]).slice(0,60).map(o=>String(o).slice(0,120))})),candidates};
+    // Record policy is already resolved locally. Re-running it against a minimized
+    // path-only packet could mistake another field's candidates for extra records.
+    const packet={version:1,shareValues:!!shareValues,fields:chosen.map(f=>({id:f.id,stableId:f.stableId||f.id,label:String(f.label).slice(0,160),section:f.section||null,...f.section==='family'?{familyRole:f.familyRole,familyAmbiguous:!!f.familyAmbiguous}:{},recordIndex:Number.isInteger(f.recordIndex)?f.recordIndex:null,...Object.fromEntries(['datePart','datePath','regionRole','regionLevel','contextBlocked','ambiguousLabel'].filter(k=>f[k]!==undefined).map(k=>[k,f[k]])),candidatePaths:f.candidatePaths,type:f.type,required:!!f.required,options:(f.options||[]).slice(0,60).map(o=>String(o).slice(0,120))})),candidates};
     if(page){const u=new URL(page);packet.page=u.origin+u.pathname;}
     if(JSON.stringify(packet).length>150000)throw Error('AI 请求内容过大，请减少字段或关闭附带简历值');
     return packet;
@@ -56,10 +58,11 @@
   }
   function parseResponse(raw,packet){
     let data=raw;if(typeof raw==='string'){const clean=raw.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');try{data=JSON.parse(clean);}catch{throw Error('AI 未返回有效 JSON，请调整模型或启用 JSON 模式');}}
-    if(!data||!Array.isArray(data.matches)||data.matches.length>packet.fields.length)throw Error('AI 返回结构不符合 matches 协议');
+    if(!data||!Array.isArray(data.matches)||data.matches.length>200)throw Error('AI 返回结构不符合 matches 协议');
     const fields=new Map(packet.fields.map(f=>[f.id,f])),paths=new Set(packet.candidates.map(c=>c.path)),seen=new Set(),accepted=[],rejected=[];
+    const counts=new Map();for(const m of data.matches)if(m&&typeof m.fieldId==='string')counts.set(m.fieldId,(counts.get(m.fieldId)||0)+1);
     for(const m of data.matches){
-      if(!m||!fields.has(m.fieldId)||!paths.has(m.path)||seen.has(m.fieldId)||typeof m.confidence!=='number'||!Number.isFinite(m.confidence)||m.confidence<0||m.confidence>1)throw Error('AI 返回未知字段、重复匹配或简历之外的路径，已拒绝应用');
+      if(!m||!fields.has(m.fieldId)||!paths.has(m.path)||counts.get(m.fieldId)>1||typeof m.confidence!=='number'||!Number.isFinite(m.confidence)||m.confidence<0||m.confidence>1){rejected.push({fieldId:fields.has(m?.fieldId)?m.fieldId:null,error:'未知字段、重复匹配、未知路径或无效置信度'});continue;}
       seen.add(m.fieldId);const f=fields.get(m.fieldId);
       const wrongRecord=Number.isInteger(f.recordIndex)&&matcher().recordSections.includes(f.section)&&!m.path.startsWith(f.section+'.'+f.recordIndex+'.');
       const wrongFamily=(matcher().isFamilyField(f)||m.path.startsWith('family.'))&&!matcher().allowedPath(f,m.path);const wrongSection=wrongFamily||f.section&&['basics',...matcher().recordSections].includes(f.section)&&!m.path.startsWith(f.section+'.');
@@ -70,6 +73,7 @@
     return {accepted,rejected,unmatched:packet.fields.filter(f=>!seen.has(f.id)).map(f=>f.id)};
   }
   function requestOptions(config){
+    if(config.thinkingMode==='disabled')return {thinking:{type:'disabled'}};if(config.thinkingMode==='default')return {};
     const host=config.endpoint?new URL(config.endpoint).hostname:'';
     return ((host==='api.deepseek.com'&&['deepseek-flash','deepseek-v4-pro'].includes(config.model))||(['api.moonshot.cn','api.moonshot.ai'].includes(host)&&config.model==='kimi-k2.6'))?{thinking:{type:'disabled'}}:{};
   }

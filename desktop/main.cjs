@@ -1,21 +1,303 @@
-const {app,BrowserWindow,ipcMain,dialog,shell,clipboard,safeStorage}=require('electron');const fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');const {Controller}=require('./controller.cjs');let controller,window,pendingPDF=null,pdfBusy=false,pdfController=null,updater=null;
-function setupUpdater(){updater=require('./updater.cjs').createUpdater({autoUpdater:require('electron-updater').autoUpdater,isPackaged:()=>app.isPackaged,publish:state=>{if(window&&!window.isDestroyed())window.webContents.send('rf:update',state);},beforeInstall:async()=>{if(pdfBusy)throw Error('PDF 正在处理中，请完成后再更新');if(controller.status().connections.some(c=>c.task?.status==='running'))throw Error('Agent 正在填写，请停止任务后再更新');await controller.stop();}});}
-if(process.env.RF_DESKTOP_DATA){fs.mkdirSync(process.env.RF_DESKTOP_DATA,{recursive:true});app.setPath('userData',process.env.RF_DESKTOP_DATA);}
-if(!app.requestSingleInstanceLock())app.quit();else{
-app.on('second-instance',()=>{window?.show();window?.focus();});
-app.whenReady().then(async()=>{
- const runtime=app.isPackaged?path.join(process.resourcesPath,'agent'):path.join(__dirname,'resources');
- const protector=safeStorage.isEncryptionAvailable()?{protect:s=>safeStorage.encryptString(s).toString('base64'),unprotect:b=>safeStorage.decryptString(Buffer.from(b,'base64'))}:null;
- controller=new Controller(process.env.RF_DESKTOP_DATA||app.getPath('userData'),runtime,protector);
- const extension=path.join(controller.directory,'extension');fs.mkdirSync(extension,{recursive:true});fs.cpSync(path.join(runtime,'extension'),extension,{recursive:true});
- const actions={cancelPDF:()=>{pdfController?.abort();pendingPDF=null;return true;},importPDF:async(_,options={})=>{if(pdfBusy)throw Error('PDF 正在处理中');const selected=await dialog.showOpenDialog(window,{properties:['openFile'],filters:[{name:'PDF 简历',extensions:['pdf']}]});if(selected.canceled)return null;pendingPDF=null;pdfBusy=true;pdfController=new AbortController();try{const result=await require('./pdf-service.cjs').extract(selected.filePaths[0],{signal:pdfController.signal,ocrMode:options?.ocrMode||'auto',onProgress:progress=>{if(!window.isDestroyed())window.webContents.send('rf:pdf-progress',progress);}});pendingPDF=result;return {...result,fileName:path.basename(selected.filePaths[0])};}finally{pdfBusy=false;pdfController=null;}},parsePDF:async()=>{if(!pendingPDF)throw Error('请先选择 PDF 简历');if(pdfBusy)throw Error('PDF 正在处理中');pdfBusy=true;try{const result=await require('./pdf-service.cjs').parse(pendingPDF.text,controller.config.upstream,require(path.join(runtime,'matcher.js')));return {...result,warnings:[...(pendingPDF.warnings||[]),...result.warnings]};}finally{pdfBusy=false;}},recoverCredentials:async()=>{controller.recoverCredentials();return controller.start();},status:()=>controller.status(),approvePairing:(_,id)=>controller.pairing().approve(id),rejectPairing:(_,id)=>controller.pairing().reject(id),revokePairing:(_,id)=>controller.pairing().revoke(id),profile:()=>controller.profile(),saveProfile:(_,v)=>controller.saveProfile(v),model:()=>controller.model(),saveModel:(_,v)=>controller.saveModel(v),testModel:()=>controller.testModel(),start:()=>controller.start(),stop:()=>controller.stop(),openData:()=>shell.openPath(controller.directory),openExtension:()=>shell.openPath(extension),copyExtension:()=>{clipboard.writeText(extension);return extension;},copyPairing:()=>{const ticket=controller.connection();clipboard.writeText(JSON.stringify(ticket,null,2));return {expiresAt:ticket.expiresAt};},updateState:()=>updater.state(),updateCheck:()=>updater.check(),updateDownload:()=>updater.download(),updateInstall:()=>updater.install(),updateOneClick:()=>updater.oneClick(),setAutoCheck:(_,v)=>controller.setAutoCheck(v),exportConnection:async()=>{const f=await dialog.showSaveDialog(window,{defaultPath:path.join(controller.directory,'resumefill-pairing.json'),filters:[{name:'JSON',extensions:['json']}]});if(!f.canceled)controller.write(f.filePath,controller.connection());return !f.canceled;},importProfile:async()=>{const f=await dialog.showOpenDialog(window,{properties:['openFile'],filters:[{name:'JSON',extensions:['json']}]});if(f.canceled)return null;const file=f.filePaths[0];if(fs.statSync(file).size>1500000)throw Error('文件过大');return controller.saveProfile(JSON.parse(fs.readFileSync(file,'utf8')));},exportProfile:async()=>{const f=await dialog.showSaveDialog(window,{defaultPath:'resume.json'});if(!f.canceled)controller.write(f.filePath,controller.profile());return !f.canceled;},browser:(_,name)=>{
- if(!['edge','chrome'].includes(name))throw Error('浏览器无效');const candidates=name==='edge'?[path.join(process.env['ProgramFiles(x86)']||'','Microsoft/Edge/Application/msedge.exe'),path.join(process.env.ProgramFiles||'','Microsoft/Edge/Application/msedge.exe')]:[path.join(process.env.ProgramFiles||'','Google/Chrome/Application/chrome.exe'),path.join(process.env.LOCALAPPDATA||'','Google/Chrome/Application/chrome.exe')];const exe=candidates.find(f=>fs.existsSync(f));if(!exe)throw Error('未检测到该浏览器');const p=spawn(exe,[name==='edge'?'edge://extensions/':'chrome://extensions/'],{detached:true,stdio:'ignore',windowsHide:true});p.on('error',()=>{});p.unref();return true;
- }};
- for(const [name,handler]of Object.entries(actions))ipcMain.handle('rf:'+name,async(event,arg)=>{if(event.sender!==window?.webContents||event.senderFrame!==window.webContents.mainFrame)throw Error('界面来源无效');try{return {value:await handler(event,arg)};}catch(e){return {error:/^RF_MODEL/.test(e.code||'')||/HTTP \d+/.test(e.message)?e.message:({start:'服务启动失败，可能端口已被占用',testModel:'模型连接失败，请检查配置和网络'})[name]||e.message};}});
- window=new BrowserWindow({width:1120,height:800,minWidth:900,minHeight:650,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true}});
- window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',e=>e.preventDefault());await window.loadFile(path.join(__dirname,'ui/index.html'));
- setupUpdater();if(app.isPackaged&&controller.config.updates?.autoCheck!==false)setTimeout(()=>{updater.check().catch(()=>{});},4000);
- try{await controller.start();}catch{} if(process.argv.includes('--smoke-test')){setTimeout(async()=>{console.log('DESKTOP_SMOKE '+JSON.stringify(await window.webContents.executeJavaScript('({title:document.title,ready:!!window.rf,sections:document.querySelectorAll("section").length})')));app.quit();},1800);}
-});
-app.on('window-all-closed',()=>{pdfController?.abort();app.quit();});let exiting=false;app.on('before-quit',e=>{if(controller?.gateway&&!exiting){e.preventDefault();exiting=true;controller.stop().finally(()=>app.quit());}});
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  clipboard,
+  safeStorage,
+} = require("electron");
+const fs = require("node:fs"),
+  path = require("node:path"),
+  { spawn } = require("node:child_process");
+const { Controller } = require("./controller.cjs");
+let controller,
+  window,
+  pendingPDF = null,
+  pdfBusy = false,
+  pdfController = null,
+  updater = null;
+function setupUpdater() {
+  updater = require("./updater.cjs").createUpdater({
+    autoUpdater: require("electron-updater").autoUpdater,
+    isPackaged: () => app.isPackaged,
+    publish: (state) => {
+      if (window && !window.isDestroyed())
+        window.webContents.send("rf:update", state);
+    },
+    beforeInstall: async () => {
+      if (pdfBusy) throw Error("PDF 正在处理中，请完成后再更新");
+      if (
+        controller
+          .status()
+          .connections.some((c) => c.task?.status === "running")
+      )
+        throw Error("Agent 正在填写，请停止任务后再更新");
+      await controller.stop();
+    },
+  });
+}
+if (process.env.RF_DESKTOP_DATA) {
+  fs.mkdirSync(process.env.RF_DESKTOP_DATA, { recursive: true });
+  app.setPath("userData", process.env.RF_DESKTOP_DATA);
+}
+if (!app.requestSingleInstanceLock()) app.quit();
+else {
+  app.on("second-instance", () => {
+    window?.show();
+    window?.focus();
+  });
+  app.whenReady().then(async () => {
+    const runtime = app.isPackaged
+      ? path.join(process.resourcesPath, "agent")
+      : path.join(__dirname, "resources");
+    const protector = safeStorage.isEncryptionAvailable()
+      ? {
+          protect: (s) => safeStorage.encryptString(s).toString("base64"),
+          unprotect: (b) => safeStorage.decryptString(Buffer.from(b, "base64")),
+        }
+      : null;
+    controller = new Controller(
+      process.env.RF_DESKTOP_DATA || app.getPath("userData"),
+      runtime,
+      protector,
+    );
+    const extension = path.join(controller.directory, "extension");
+    fs.mkdirSync(extension, { recursive: true });
+    fs.cpSync(path.join(runtime, "extension"), extension, { recursive: true });
+    const actions = {
+      openRelease: () =>
+        shell.openExternal(
+          "https://github.com/Simple-YU-268/ResumeFill/releases/latest",
+        ),
+      cancelPDF: () => {
+        pdfController?.abort();
+        pendingPDF = null;
+        return true;
+      },
+      importPDF: async (_, options = {}) => {
+        if (pdfBusy) throw Error("PDF 正在处理中");
+        const selected = await dialog.showOpenDialog(window, {
+          properties: ["openFile"],
+          filters: [{ name: "PDF 简历", extensions: ["pdf"] }],
+        });
+        if (selected.canceled) return null;
+        pendingPDF = null;
+        pdfBusy = true;
+        pdfController = new AbortController();
+        try {
+          const result = await require("./pdf-service.cjs").extract(
+            selected.filePaths[0],
+            {
+              signal: pdfController.signal,
+              ocrMode: options?.ocrMode || "auto",
+              onProgress: (progress) => {
+                if (!window.isDestroyed())
+                  window.webContents.send("rf:pdf-progress", progress);
+              },
+            },
+          );
+          pendingPDF = result;
+          return { ...result, fileName: path.basename(selected.filePaths[0]) };
+        } finally {
+          pdfBusy = false;
+          pdfController = null;
+        }
+      },
+      parsePDF: async () => {
+        if (!pendingPDF) throw Error("请先选择 PDF 简历");
+        if (pdfBusy) throw Error("PDF 正在处理中");
+        pdfBusy = true;
+        try {
+          const result = await require("./pdf-service.cjs").parse(
+            pendingPDF.text,
+            controller.config.upstream,
+            require(path.join(runtime, "matcher.js")),
+          );
+          return {
+            ...result,
+            warnings: [...(pendingPDF.warnings || []), ...result.warnings],
+          };
+        } finally {
+          pdfBusy = false;
+        }
+      },
+      recoverCredentials: async () => {
+        controller.recoverCredentials();
+        return controller.start();
+      },
+      status: () => controller.status(),
+      approvePairing: (_, id) => controller.pairing().approve(id),
+      rejectPairing: (_, id) => controller.pairing().reject(id),
+      revokePairing: (_, id) => controller.pairing().revoke(id),
+      profile: () => controller.profile(),
+      saveProfile: (_, v) => controller.saveProfile(v),
+      model: () => controller.model(),
+      saveModel: (_, v) => controller.saveModel(v),
+      testModel: () => controller.testModel(),
+      start: () => controller.start(),
+      stop: () => controller.stop(),
+      openData: () => shell.openPath(controller.directory),
+      openExtension: () => shell.openPath(extension),
+      copyExtension: () => {
+        clipboard.writeText(extension);
+        return extension;
+      },
+      copyPairing: () => {
+        const ticket = controller.connection();
+        clipboard.writeText(JSON.stringify(ticket, null, 2));
+        return { expiresAt: ticket.expiresAt };
+      },
+      updateState: () => updater.state(),
+      updateCheck: () => updater.check(),
+      updateDownload: () => updater.download(),
+      updateInstall: () => updater.install(),
+      updateOneClick: () => updater.oneClick(),
+      setAutoCheck: (_, v) => controller.setAutoCheck(v),
+      exportConnection: async () => {
+        const f = await dialog.showSaveDialog(window, {
+          defaultPath: path.join(
+            controller.directory,
+            "resumefill-pairing.json",
+          ),
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+        if (!f.canceled) controller.write(f.filePath, controller.connection());
+        return !f.canceled;
+      },
+      importProfile: async () => {
+        const f = await dialog.showOpenDialog(window, {
+          properties: ["openFile"],
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+        if (f.canceled) return null;
+        const file = f.filePaths[0];
+        if (fs.statSync(file).size > 1500000) throw Error("文件过大");
+        return controller.saveProfile(
+          JSON.parse(fs.readFileSync(file, "utf8")),
+        );
+      },
+      exportProfile: async () => {
+        const f = await dialog.showSaveDialog(window, {
+          defaultPath: "resume.json",
+        });
+        if (!f.canceled) controller.write(f.filePath, controller.profile());
+        return !f.canceled;
+      },
+      browser: (_, name) => {
+        if (!["edge", "chrome"].includes(name)) throw Error("浏览器无效");
+        const candidates =
+          name === "edge"
+            ? [
+                path.join(
+                  process.env["ProgramFiles(x86)"] || "",
+                  "Microsoft/Edge/Application/msedge.exe",
+                ),
+                path.join(
+                  process.env.ProgramFiles || "",
+                  "Microsoft/Edge/Application/msedge.exe",
+                ),
+              ]
+            : [
+                path.join(
+                  process.env.ProgramFiles || "",
+                  "Google/Chrome/Application/chrome.exe",
+                ),
+                path.join(
+                  process.env.LOCALAPPDATA || "",
+                  "Google/Chrome/Application/chrome.exe",
+                ),
+              ];
+        const exe = candidates.find((f) => fs.existsSync(f));
+        if (!exe) throw Error("未检测到该浏览器");
+        const p = spawn(
+          exe,
+          [name === "edge" ? "edge://extensions/" : "chrome://extensions/"],
+          { detached: true, stdio: "ignore", windowsHide: true },
+        );
+        p.on("error", () => {});
+        p.unref();
+        return true;
+      },
+    };
+    for (const [name, handler] of Object.entries(actions))
+      ipcMain.handle("rf:" + name, async (event, arg) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw Error("界面来源无效");
+        try {
+          return { value: await handler(event, arg) };
+        } catch (e) {
+          return {
+            error:
+              /^RF_MODEL/.test(e.code || "") || /HTTP \d+/.test(e.message)
+                ? e.message
+                : {
+                    start: "服务启动失败，可能端口已被占用",
+                    testModel: "模型连接失败，请检查配置和网络",
+                  }[name] || e.message,
+          };
+        }
+      });
+    window = new BrowserWindow({
+      width: 1120,
+      height: 800,
+      minWidth: 900,
+      minHeight: 650,
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: path.join(__dirname, "preload.cjs"),
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+      },
+    });
+    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    window.webContents.on("will-navigate", (e) => e.preventDefault());
+    await window.loadFile(path.join(__dirname, "ui/index.html"));
+    setupUpdater();
+    if (app.isPackaged && controller.config.updates?.autoCheck !== false)
+      setTimeout(() => {
+        updater.check().catch(() => {});
+      }, 4000);
+    try {
+      await controller.start();
+    } catch (e) {
+      controller.startupError =
+        e.code === "EADDRINUSE"
+          ? "本地服务端口被占用，请关闭其他实例后重试"
+          : "本地服务启动失败，请检查连接凭据和模型配置";
+      console.error(
+        "ResumeFill service start failed",
+        e.code || "RF_START_FAILED",
+      );
+    }
+    if (process.argv.includes("--smoke-test")) {
+      setTimeout(async () => {
+        console.log(
+          "DESKTOP_SMOKE " +
+            JSON.stringify(
+              await window.webContents.executeJavaScript(
+                '({title:document.title,ready:!!window.rf,sections:document.querySelectorAll("section").length})',
+              ),
+            ),
+        );
+        app.quit();
+      }, 1800);
+    }
+  });
+  app.on("window-all-closed", () => {
+    pdfController?.abort();
+    app.quit();
+  });
+  let exiting = false;
+  app.on("before-quit", (e) => {
+    if (controller?.gateway && !exiting) {
+      e.preventDefault();
+      exiting = true;
+      controller.stop().finally(() => app.quit());
+    }
+  });
 }

@@ -1,12 +1,12 @@
-# ResumeFill 本地服务 0.2.0
+# ResumeFill 独立本地服务（开发者模式）
 
 0.8.0 插件新增有状态的专用 Agent：目标、规划、受限工具、执行反馈、暂停与继续。详见 [Agent 说明](../FEATURES-0.8.md)。升级服务后需停止并重新启动，私人连接配置不变。
 
-可选的 Node.js 本地服务，无 npm 依赖。插件基础扫描、填写、地区和日期处理不依赖它。
+面向开发者保留并测试的 Node.js 独立网关，与桌面端复用相同匹配与鉴权代码。普通用户请优先安装桌面端，获得凭据加密、自动配对和更新界面。独立模式自行管理私人配置，无 npm 依赖。插件基础扫描、填写、地区和日期处理不依赖它。
 
 ## 启动和连接
 
-需要 Node.js 20 或更新版本。在 resume-fill 目录运行：
+需要 Node.js 22.13 或更新版本。在 resume-fill 目录运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\local-server\start.ps1
