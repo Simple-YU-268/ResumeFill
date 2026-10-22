@@ -47,3 +47,12 @@ npm run privacy:artifacts
 确认元数据对应实际 EXE、标签指向已审查提交，先 Draft 上传核对，再发布为 Latest。不上传调试文件、私人资料、测试浏览器和旧包。
 
 [返回首页](Home.md)
+
+## 可选：网站原版 Layui 组件测试
+
+此测试不依赖登录或实际报考表单。自行将以下公开组件下载到忽略的 `tmp/` 目录，设置 `RF_LAYUI_BUNDLE` 和 `RF_LAYUI_CSS` 为两个本地文件的路径，再执行 `npm run test:layui`：
+
+- JS 来源：<http://cdn.cpta.com.cn/student_html_yc/libs/layui/layui.js>
+- CSS 来源：<http://cdn.cpta.com.cn/student_html_yc/libs/layui/css/layui.css>
+
+测试脚本校验固定 SHA256（见 `scripts/test-real-layui.cjs`），资源变化时停止执行；不会自动下载或更新资源，也不将第三方组件放入源码与发行包。加载后阻断全部网络请求，验证普通/可搜索下拉与静态/重绘的四种组合，使用合成资料。组件测试通过不代表真实网站业务联动已经验证。

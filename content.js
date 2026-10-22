@@ -1,6 +1,7 @@
 (() => {
   if(globalThis.__resumeFillV2)return;
   globalThis.__resumeFillV2=true;
+  globalThis.__resumeFillRuntime={version:chrome.runtime.getManifest?.().version||'development',protocol:1};
   const C=ResumeControls,A=ResumeAdapters;
   let registry=new Map(),activeAdapter=null,revision=0,busy=false,scannedUrl='',operationController=null,pendingOperation=null;
   let selectedScope=null,scopeChoices=new Map(),scopeChoiceUrl='',scopeGeneration=0;
@@ -21,7 +22,7 @@
   const ocrLabels=new WeakMap();const viewport=()=>({url:location.href,width:innerWidth,height:innerHeight,scrollX,scrollY,scale:visualViewport?.scale||1,offsetX:visualViewport?.offsetLeft||0,offsetY:visualViewport?.offsetTop||0,mutations});
   function ocrContext(){return {viewport:viewport(),fields:Array.from(registry.values()).map(d=>({...d.field,position:(()=>{const r=d.el.getBoundingClientRect();return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)};})()})).filter(f=>f.position.x>=0&&f.position.y>=0&&f.position.x+f.position.width<=innerWidth&&f.position.y+f.position.height<=innerHeight).map(f=>({id:f.id,stableId:f.stableId,label:f.label,ocrEligible:f.ocrEligible,position:f.position}))};}
   const stableIds=new WeakMap(),lastDescriptors=new WeakMap();let nextStableId=0;
-  const eligible=el=>!el.disabled&&el.getAttribute('aria-disabled')!=='true'&&ResumeLayout.visible(el)&&!['hidden','password','file','submit','button','reset','checkbox'].includes(el.type);
+  const eligible=el=>!el.disabled&&!(el.closest('.layui-form-select')?.previousElementSibling?.matches('select:disabled'))&&el.getAttribute('aria-disabled')!=='true'&&ResumeLayout.visible(el)&&!['hidden','password','file','submit','button','reset','checkbox'].includes(el.type);
   const query=(scope,selector)=>selector?Array.from(scope.querySelectorAll(selector)):[];
   const shown=(scope,selector)=>query(scope,selector).filter(ResumeLayout.visible);
   const text=el=>{if(!el)return '';let raw;if(el.matches?.('label')){const copy=el.cloneNode(true);copy.querySelectorAll('input,select,textarea,[role="combobox"],button').forEach(n=>n.remove());raw=copy.textContent;}else raw=el.innerText||el.textContent||'';return raw.replace(/[*＊:：]|必填|选填/g,'').trim();};
@@ -205,7 +206,7 @@
     for(const item of message.items){const d=registry.get(item.id);if(!d){results.push({id:item.id,status:'stale',error:'扫描已失效'});continue;}
       if((selectedScope||ResumeMatcher.isFamilyField(d.field))&&(!item.path||!ResumeMatcher.allowedPath(d.field,item.path))){results.push({id:item.id,status:'failed',error:'资料路径不属于当前成员或所选经历'});continue;}
       d.referenceData=item.referenceData||null;d.sourcePath=item.path;d.manualOption=item.manualOption===true;d.signal=operationController.signal;if(d.signal.aborted){results.push({id:item.id,status:'failed',error:'操作已取消'});continue;}
-      try{const r=item.verifyOnly?await C.verify(d,item.value):await C.fill(d,item.value,message.overwrite);results.push({id:item.id,...r});if(r.status==='filled'||r.status==='verified'){const key=d.sectionScope.scope;touched.set(key,d.sectionScope);}}catch(e){let candidates=[];try{candidates=C.candidates(d);}catch{}results.push({id:item.id,status:'failed',error:e.message,candidates});}
+      try{const r=item.verifyOnly?await C.verify(d,item.value):await C.fill(d,item.value,message.overwrite);results.push({id:item.id,...r});if(r.status==='filled'||r.status==='verified'){const key=d.sectionScope.scope;touched.set(key,d.sectionScope);}}catch(e){let candidates=[];try{candidates=C.candidates(d);}catch{}results.push({id:item.id,status:'failed',error:e.message,candidates,...e.diagnostic?{diagnostic:e.diagnostic}:{}});}
     }
     await new Promise(resolve=>setTimeout(resolve,350));
     for(const item of message.items){const result=results.find(r=>r.id===item.id),d=registry.get(item.id);if(result?.status==='filled')Object.assign(result,await C.verify(d,item.value));}

@@ -168,15 +168,17 @@
     if(!visible(d.el)||d.scanUrl&&location.href!==d.scanUrl)return {status:'stale',error:'字段或页面已变化，请重新扫描'};
     if(invalid(d))return {status:'invalid',error:d.el.validationMessage||'页面标记该字段无效'};
     if(d.config?.referencePicker)return referenceVerify(d,value);
-    if(!equal(d,read(d),value))return {status:'mismatch',error:'值未保留或显示值与预期不一致'};
+    if(!equal(d,read(d),value))return {status:'mismatch',error:'值未保留或显示值与预期不一致',diagnostic:selectionState(d)};
     if(d.type==='combobox'&&d.config?.layuiSelect){const native=d.el.closest('.layui-form-select')?.previousElementSibling;if(native?.tagName!=='SELECT'||!native.value||norm(native.selectedOptions[0]?.textContent)!==norm(read(d)))return {status:'unconfirmed',error:'Layui 原生选中值与可见文本不一致'};return {status:'verified'};}
     if(d.type==='combobox'&&!d.optionConfirmed)return {status:'unconfirmed',error:'文本已有内容，但未确认选择真实选项'};
     return {status:'verified'};
   }
+  // Diagnostic flags contain no form values, identifiers or option text.
+  function selectionState(d){const native=d.type==='select'?d.el:d.layuiNative;return {kind:d.type,sourcePresent:!!native,sourceConnected:!!native?.isConnected,sourceDisabled:!!native?.disabled,sourceEmpty:native?native.value==='':null,displayEmpty:!String(read(d)||'').trim()};}
   async function settleSelection(d,value){
     const started=Date.now();let since=0;
     while(Date.now()-started<2600){guard(d);const result=await verify(d,value);if(result.status==='verified'){since||=Date.now();if(Date.now()-since>=900)return;}else{since=0;if(['stale','invalid','failed'].includes(result.status))throw Error(result.error);}await new Promise(r=>setTimeout(r,100));}
-    throw Error('下拉选择未稳定保留，可能被网页联动清空；请先完成上级选项后重新扫描');
+    const diagnostic=selectionState(d),error=Error(diagnostic.sourcePresent&&diagnostic.sourceEmpty?'下拉的真实选中项被网页清空；请先完成上级选项后重新扫描':diagnostic.sourcePresent&&diagnostic.displayEmpty?'下拉显示被网页清空，底层仍有选中项；请重新扫描核对':'下拉选择未稳定保留，可能被网页联动清空；请先完成上级选项后重新扫描');error.diagnostic=diagnostic;throw error;
   }
   async function fill(d,value,overwrite){
     guard(d);
