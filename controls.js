@@ -66,6 +66,7 @@
     if (
       d.signal?.aborted ||
       d.el.disabled ||
+      (d.config?.mokaSelect && d.el.querySelector("input")?.disabled) ||
       d.layuiNative?.disabled ||
       d.el.getAttribute("aria-disabled") === "true" ||
       !visible(d.el) ||
@@ -1064,7 +1065,8 @@
             ? [d.el]
             : list(d.el, "input");
         if (search.length > 1) throw Error("搜索输入框不唯一");
-        if (search[0] && !search[0].readOnly)
+        // Fixed Moka selects expose writable inputs too: prefer actual options.
+        if (search[0] && !search[0].readOnly && !d.config?.mokaSelect)
           setValue(search[0], String(value));
         let stamp = "",
           since = 0;
@@ -1072,6 +1074,17 @@
           guard(d);
           return options(d, d.config?.optionsSelector).length;
         });
+        if (
+          d.config?.mokaSelect &&
+          search[0] &&
+          !search[0].readOnly &&
+          !matchingOptions(
+            options(d, d.config?.optionsSelector).filter(enabled),
+            value,
+            d,
+          ).length
+        )
+          setValue(search[0], String(value));
         const virtual = await virtualOption(d, value);
         const option =
           virtual ||
@@ -1092,7 +1105,16 @@
             return exact[0];
           }));
         guard(d);
-        uniqueOption([option], value, d).click();
+        const matched = uniqueOption([option], value, d);
+        // Moka binds selection on the nested menu, not its layout wrapper.
+        const targets = d.config?.mokaSelect
+          ? list(matched, '[class*="sd-Menu-container-"]')
+          : [];
+        if (targets.length > 1) throw Error("选项操作目标不唯一");
+        const target = targets[0] || matched;
+        if (!enabled(target) || target.matches('[class*="sd-Menu-disabled-"]'))
+          throw Error("选项不可用");
+        target.click();
         d.optionConfirmed = true;
         d.numericSelection = {
           value: String(value),

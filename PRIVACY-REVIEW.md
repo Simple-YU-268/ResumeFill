@@ -1,6 +1,8 @@
 # Public release privacy review
 
-Reviewed for v0.25.0 on 2026-10-22. Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
+Reviewed for v0.25.1 on 2026-10-22. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
+
+Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
 
 The desktop-to-extension difference preview stays on the local authenticated connection. No profile values are sent to AI by this flow. Only selected changes are applied; website-learned answers and local-only fields are preserved, and a single pre-sync profile backup is stored in the extension's trusted local storage. Tests use synthetic profiles and isolated browser directories.
 

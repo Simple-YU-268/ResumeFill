@@ -625,7 +625,7 @@
         ? "education"
         : /^实习经历|^工作经历/.test(title)
           ? "work"
-          : /^项目经历/.test(title)
+          : /^项目经历|^项目经验/.test(title)
             ? "projects"
             : null;
     return section
