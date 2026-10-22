@@ -32,7 +32,7 @@ async function scan(incremental=false,learning=false){
   clearLearning();
   await cancelAI();
   let tab;try{const tabs=await chrome.tabs.query({active:true,currentWindow:true});tab=requireFormTab(tabs[0]);}catch(e){clearPage();throw e;}
-  const oldRows=incremental?new Map(rows.map(r=>[r.field.stableId,{path:r.select.value,verified:r.verified,label:r.field.label,section:r.field.section,index:r.field.recordIndex}])):new Map();
+  const oldRows=incremental?new Map(rows.map(r=>[r.field.stableId,{path:r.select.value,verified:r.verified,label:r.field.label,section:r.field.section,index:r.field.recordIndex,aiLocked:r.aiLocked,touched:r.touched,aiReview:r.aiReview}])):new Map();
   const previousUrl=snapshot?.url,previousTab=tabId;aiSuggestions=null;
   const data=await chrome.storage.local.get(['resume','rules','adapters','optionMappings','aiSettings','autoAIEnabled']);optionMappings=data.optionMappings||{};
   $('autoAI').checked=data.autoAIEnabled!==false;
@@ -45,7 +45,8 @@ async function scan(incremental=false,learning=false){
   const rules=data.rules?.[ruleKey()]||{};
   $('fields').replaceChildren();rows=[];$('resultCard').hidden=true;$('resultCard').replaceChildren();
   for(const field of snapshot.fields){
-    const guess=ResumeAnswers.match(field,resume,snapshot)||(field.path?{path:field.path}:ResumeMatcher.match(field,values)||ResumeMatcher.infer(field));
+    const savedAnswer=ResumeAnswers.match(field,resume,snapshot);
+    const guess=savedAnswer||(field.path?{path:field.path}:ResumeMatcher.match(field,values)||ResumeMatcher.infer(field));
     if(guess?.path&&!Object.hasOwn(values,guess.path))values[guess.path]='';
     const old=previousUrl===snapshot.url&&previousTab===tabId?oldRows.get(field.stableId):null;
     const same=old&&old.label===field.label&&old.section===field.section&&old.index===field.recordIndex;
@@ -57,7 +58,7 @@ async function scan(incremental=false,learning=false){
     for(const path of Object.keys(values).filter(p=>(!snapshot.selectedScope&&!ResumeMatcher.isFamilyField(field))||ResumeMatcher.allowedPath(field,p))){const option=document.createElement('option');option.value=path;option.textContent=pathLabel(path);option.title=path;select.append(option);}
     select.value=chosen;const preview=document.createElement('input');preview.readOnly=true;preview.setAttribute('aria-label','填充值预览');
     const draft=document.createElement('textarea');draft.rows=2;draft.setAttribute('aria-label',field.label+' 补充资料');draft.maxLength=20000;
-    const state={field,select,key,small,verified:!!(same&&old.verified),preview,draft,row};
+    const state={field,select,key,small,aiLocked:same?old.aiLocked:!!savedAnswer||!!field.path||Object.hasOwn(rules,key),touched:!!(same&&old.touched),aiReview:same?old.aiReview:!savedAnswer&&!field.path&&!Object.hasOwn(rules,key)&&(!guess||guess.score<100||!values[guess.path]),verified:!!(same&&old.verified),preview,draft,row};
     const update=()=>{preview.value=values[select.value]||'';draft.hidden=!!preview.value||ResumeAnswers.protectedField(field);draft.placeholder=select.value?`已识别 ${select.value}，插件资料值为空；桌面已填写时，请在上方检查桌面资料更新`:field.ambiguousLabel?'经历或字段归属不明确，请选择区块后重新扫描':field.contextBlocked?'此类经历尚无专用资料结构，可手动选取或保存本页补充答案':'尚未确定对应资料，请先选择已有 JSON 字段；确实缺少时再补充保存';};state.update=update;select.onchange=()=>{state.touched=true;state.verified=false;update();summary();};draft.oninput=()=>state.touched=true;update();
     right.append(select,preview,draft);row.append(left,right);$('fields').append(row);rows.push(state);
   }
@@ -149,14 +150,14 @@ function renderOptions(r,candidates){r.optionBox?.remove();const box=document.cr
 $('remember').onclick=()=>run(async()=>{const {rules={}}=await chrome.storage.local.get('rules');rules[ruleKey()]=Object.fromEntries(rows.map(r=>[r.key,r.select.value]));await chrome.storage.local.set({rules});status('已按域名、路径、表单结构和经历序号记住匹配');});
 $('screenshot').onclick=()=>run(async()=>{const [active]=await chrome.tabs.query({active:true,currentWindow:true});const tab=requireFormTab(active);if(tabId&&tab.id!==tabId)throw Error('当前标签页已变化，请重新扫描');const url=await chrome.tabs.captureVisibleTab(tab.windowId,{format:'png'});$('pagePreview').src=url;$('pagePreview').hidden=false;status('仅当前可见区域，供人工核对；未上传或保存截图。');});
 $('checkpoint').onclick=()=>run(async()=>{const {lastCheckpoint}=await chrome.storage.local.get('lastCheckpoint');if(!lastCheckpoint)throw Error('请先填写一次');const url=URL.createObjectURL(new Blob([JSON.stringify(lastCheckpoint,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='application-checkpoint.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
-function aiPacket(automatic=false){if(!snapshot)throw Error('请先扫描页面');const pending=rows.filter(r=>!r.verified&&!r.select.value&&(!automatic||!r.touched&&!r.draft.value.trim()));if(!pending.length)throw Error('没有待匹配字段；可先把需 AI 判断的字段改为跳过');const packet=ResumeAI.build(pending.map(r=>r.field),values,{shareValues:!automatic&&$('shareValues').checked,page:snapshot.frameUrl||snapshot.url});if(!packet.fields.length)throw Error('没有足够相关的候选资料，请手动匹配或补充资料');return packet;}
+function aiPacket(automatic=false){if(!snapshot)throw Error('请先扫描页面');const pending=rows.filter(r=>ResumeAI.reviewable(r,values));if(!pending.length)throw Error('没有未解决或需复核的自动匹配字段；人工选择和已核对项保持不变');const packet=ResumeAI.build(pending.map(r=>r.field),values,{shareValues:!automatic&&$('shareValues').checked,page:snapshot.frameUrl||snapshot.url});if(!packet.fields.length)throw Error('没有足够相关的候选资料，请手动匹配或补充资料');return packet;}
 async function cancelAI(){clearTimeout(autoAITimer);autoAITimer=null;aiGeneration++;const requestId=aiRequestId;aiRequestId=null;aiSuggestions=null;if(requestId)await chrome.runtime.sendMessage({type:'RF_AI_CANCEL',requestId});}
-function applyAISuggestions(matches,automatic=false){let count=0;for(const m of matches){const r=rows.find(r=>r.field.id===m.fieldId);if(r&&!r.select.value&&!r.verified&&(!automatic||!r.touched&&!r.draft.value.trim())&&ResumeMatcher.allowedPath(r.field,m.path)&&values[m.path]){r.select.value=m.path;if(r.select.value!==m.path)continue;r.update();r.small.textContent=`AI 建议 ${Math.round(m.confidence*100)}%：${m.reason} · 请核对后填写`;count++;}}summary();return count;}
+function applyAISuggestions(matches,automatic=false){let count=0;for(const m of matches){const r=rows.find(r=>r.field.id===m.fieldId);if(r&&ResumeAI.reviewable(r,values)&&ResumeMatcher.allowedPath(r.field,m.path)&&values[m.path]){r.select.value=m.path;if(r.select.value!==m.path)continue;r.update();r.small.textContent=`AI 建议 ${Math.round(m.confidence*100)}%：${m.reason} · 请核对后填写`;count++;}}summary();return count;}
 function scheduleAutoAI(config){
   if(!$('autoAI').checked){$('aiStatus').textContent='AI 主动匹配已关闭，可手动请求建议。';return;}
   if(!config?.enabled){$('aiStatus').textContent='尚未启用模型；配置后扫描会自动请求 AI 建议。';return;}
   let packet;try{packet=aiPacket(true);}catch(e){$('aiStatus').textContent='AI：'+e.message;return;}
-  $('aiStatus').textContent=`本地匹配完成，AI 将继续分析 ${packet.fields.length} 个未解决字段…`;
+  $('aiStatus').textContent=`本地匹配完成，AI 将继续分析 ${packet.fields.length} 个未解决或待复核字段…`;
   const generation=aiGeneration;autoAITimer=setTimeout(()=>{autoAITimer=null;if(generation===aiGeneration)void requestFieldAI(true);},250);
 }
 $('autoAI').onchange=async()=>{await cancelAI();await chrome.storage.local.set({autoAIEnabled:$('autoAI').checked});const {aiSettings}=await chrome.storage.local.get('aiSettings');if(snapshot)scheduleAutoAI(aiSettings);};
@@ -174,7 +175,7 @@ async function requestFieldAI(automatic=false){
     const cached=automatic&&autoAICache.get(cacheKey);
     ownRequest=requestId;aiRequestId=requestId;aiRevision=version;aiSuggestions=null;
     $('aiPayload').textContent=JSON.stringify(packet,null,2);if(!automatic)$('aiPayload').hidden=false;
-    $('aiStatus').textContent=`AI 正在分析 ${packet.fields.length} 个未解决字段，已匹配内容可继续核对…`;
+    $('aiStatus').textContent=`AI 正在分析 ${packet.fields.length} 个未解决或待复核字段，已匹配内容可继续核对…`;
     if(!automatic)status('正在请求 AI 字段建议…');
     const response=cached?{...cached,accepted:cached.accepted.map(m=>({...m,fieldId:packet.fields.find(f=>f.stableId===m.stableId)?.id}))}:await chrome.runtime.sendMessage({type:'RF_AI_MATCH',requestId,packet});
     if(aiRequestId!==requestId)return;
@@ -186,7 +187,7 @@ async function requestFieldAI(automatic=false){
     $('aiPayload').textContent=JSON.stringify({suggestions:response.accepted,rejected:response.rejected,unmatched:response.unmatched},null,2);
     if(automatic){
       if(!cached){autoAICache.set(cacheKey,{...response,accepted:response.accepted.map(m=>({...m,stableId:packet.fields.find(f=>f.id===m.fieldId)?.stableId}))});if(autoAICache.size>10)autoAICache.delete(autoAICache.keys().next().value);}
-      const count=applyAISuggestions(response.accepted,true);aiSuggestions=null;$('aiStatus').textContent=`${response.gateway?.engine==='local-rules'?'本地网关规则':'AI'}${cached?'（复用本次会话建议）':''}已将 ${count} 项建议加入预览，拒绝 ${response.rejected.length} 项；核对后点击填写。`;return;
+      const count=applyAISuggestions(response.accepted,true);aiSuggestions=null;$('aiStatus').textContent=`${response.gateway?.engine==='local-rules'?'本地网关规则':'AI'}${cached?'（复用本次会话建议）':''}已将 ${count} 项建议加入预览，拒绝 ${response.rejected.length} 项，未给建议 ${response.unmatched?.length||0} 项；核对后点击填写。`;return;
     }
     $('aiStatus').textContent=`AI 返回 ${response.accepted.length} 项建议，待核对并应用。`;
     status(`${response.gateway?.engine==='local-rules'?'本地规则（未调用模型）':'AI'} 建议 ${response.accepted.length} 项，拒绝 ${response.rejected.length} 项。核对上方路径和理由，再点击应用；应用后仍需点击填写。`);

@@ -1,4 +1,4 @@
-# ResumeFill Agent Windows 桌面端 0.24.2
+# ResumeFill Agent Windows 桌面端 0.24.3
 
 桌面程序内置 Electron 的 Node 运行时、本地 Agent 服务和 Chrome / Edge 扩展，无需另外安装 Node。关闭桌面端会停止其管理的服务；任务不会自动重放。默认端口 17322，与旧版手动启动的 17321 服务区分。
 

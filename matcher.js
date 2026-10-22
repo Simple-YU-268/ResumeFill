@@ -202,8 +202,9 @@
   function candidatePaths(field,values){
     field=resolveField(field,values);if(!field||/^其他(学校|专业)$/.test(field.label||''))return [];
     if(field.ambiguousLabel||protectedLabel(field))return [];
+    if(recordSections.includes(field.section)&&!Number.isInteger(field.recordIndex))return [];
     const eligible=Object.keys(values).filter(p=>String(values[p]??'').trim()&&allowedPath(field,p)&&!p.startsWith('fieldAnswers.'));
-    const known=infer(field);if(known)return eligible.includes(known.path)?[known.path]:[];
+    const known=infer(field);if(known&&eligible.includes(known.path))return [known.path];
     const labels=labelVariants(field.label),question=/是否|有无/.test(field.label||''),scored=eligible.map(path=>{
       const names=namesFor(path).length?namesFor(path):[path.split('.').at(-1)];
       const score=Math.max(0,...labels.flatMap(label=>names.map(name=>{const n=normalize(name);if(n===label)return 100;if(question)return 0;if(n.length>=2&&(label.includes(n)||n.includes(label)))return 60;let overlap=0;for(let i=0;i<label.length-1;i++)if(n.includes(label.slice(i,i+2)))overlap++;return overlap*5;})));return {path,score};
@@ -211,7 +212,7 @@
     const exact=scored.filter(c=>c.score===100);if(exact.length)return exact.slice(0,12).map(c=>c.path);
     const relevant=scored.filter(c=>c.score>=Math.max(1,(scored[0]?.score||0)*.5));if(relevant.length)return relevant.slice(0,12).map(c=>c.path);
     // Unknown labels may use only a small, explicitly identified record. Otherwise abstain.
-    return !question&&field.section&&Number.isInteger(field.recordIndex)&&eligible.length<=12?eligible:[];
+    return !question&&(field.section==='basics'&&eligible.length<=48||field.section&&Number.isInteger(field.recordIndex)&&eligible.length<=12)?eligible:[];
   }
   function resolveField(field,values){
     if(isFamilyField(field)&&!familyPath(field))return null;
