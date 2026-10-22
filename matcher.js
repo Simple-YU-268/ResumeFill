@@ -27,9 +27,9 @@
   function optionContains(option,value,field){return enumKey(field)==='politicalStatus'&&/^中共党员\(含预备党员\)$/.test(optionNorm(option))&&['中共党员','中共预备党员'].map(v=>optionNorm(v)).includes(canonicalOption(value,field));}
   const aliases = {
     'basics.name':['姓名','中文姓名','真实姓名','本人姓名','应聘者姓名','申请人姓名','name','fullname','yourname'],
-    'basics.idNumber':['身份证号码','身份证号','居民身份证号码','身份证件号码','idnumber','identitynumber'],
+    'basics.idNumber':['证件号码','身份证号码','身份证号','居民身份证号码','身份证件号码','idnumber','identitynumber'],
     'basics.nationality':['国籍','nationality'], 'basics.ethnicity':['民族','ethnicity'],
-    'basics.politicalStatus':['政治面貌','politicalstatus'],
+    'basics.politicalStatus':['政治面貌','本人政治面貌','politicalstatus'],
     'basics.nativePlace':['籍贯'], 'basics.hukouAddress':['户籍','户籍所在地','户籍地址','户口所在地'],
     'basics.address':['现居住地址','现居地址','详细地址','通讯地址','通信地址','联系地址'],
     'basics.expectedCity':['期望工作地','期望工作城市','意向工作地'],

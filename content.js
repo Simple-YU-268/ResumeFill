@@ -5,7 +5,7 @@
   const C=ResumeControls,A=ResumeAdapters;
   let registry=new Map(),activeAdapter=null,revision=0,busy=false,scannedUrl='',operationController=null,pendingOperation=null;
   let selectedScope=null,scopeChoices=new Map(),scopeChoiceUrl='',scopeGeneration=0;
-  const recordSelector='[data-resume-record],.experience-card,.project-card,.project-item,.education-card,.work-card,.experience-item';
+  const recordSelector='[class*="apply-fields-"],[data-resume-record],.experience-card,.project-card,.project-item,.education-card,.work-card,.experience-item';
   function scopeList(){
     scopeChoices=new Map();scopeChoiceUrl=location.href;scopeGeneration++;
     const roots=new Set();for(const el of shown(document,'input,textarea,select,[role="combobox"]')){if(!eligible(el))continue;for(let p=el.parentElement;p&&p!==document.body;p=p.parentElement)if(p.matches('section,fieldset,article,div,table,dl,form,main'))roots.add(p);}
@@ -26,7 +26,7 @@
   const query=(scope,selector)=>selector?Array.from(scope.querySelectorAll(selector)):[];
   const shown=(scope,selector)=>query(scope,selector).filter(ResumeLayout.visible);
   const text=el=>{if(!el)return '';let raw;if(el.matches?.('label')){const copy=el.cloneNode(true);copy.querySelectorAll('input,select,textarea,[role="combobox"],button').forEach(n=>n.remove());raw=copy.textContent;}else raw=el.innerText||el.textContent||'';return raw.replace(/[*＊:：]|必填|选填/g,'').trim();};
-  const kind=el=>el.isContentEditable?'contenteditable':el.tagName==='SELECT'?'select':el.type==='radio'||el.matches('[role="radiogroup"]')?'radio':el.matches('[role="combobox"],.el-select,.ant-select')?'combobox':['date','month','datetime-local'].includes(el.type)?'date':'input';
+  const kind=el=>el.isContentEditable?'contenteditable':el.tagName==='SELECT'?'select':el.type==='radio'||el.matches('[role="radiogroup"]')?'radio':el.matches('[role="combobox"],.el-select,.ant-select,[class*="sd-Select-container-"]')?'combobox':['date','month','datetime-local'].includes(el.type)?'date':'input';
   const familyDialogSelector='[role="dialog"],dialog,.layui-layer,.modal,.ant-modal,.el-dialog';
   const familyTitlePattern=/^(?:(?:新增|添加|编辑|修改)\s*)?(?:家庭(?:主要)?成员(?:信息)?|亲属信息|(?:父亲|母亲|配偶|祖父|祖母|外祖父|外祖母)信息)(?:\s*[×✕x])?$/;
   function familyTitle(node){
@@ -62,6 +62,7 @@
     return [{scope:document,root:document,key:null,index:null,config:{}}];
   }
   function contextFor(el,s){
+    const moka=mokaContextFor(el);if(moka?.section==='family')return moka;if(selectedScope&&s.key)return {section:s.key,recordIndex:s.index,context:s.config.title||s.key};if(moka)return moka;
     const family=familyContextFor(el);if(family)return family;
     if(s.key)return {section:s.key,recordIndex:s.index,context:s.config.title||s.key};
     const cardSelector='[data-resume-record],.experience-card,.project-card,.project-item,.education-card,.work-card,.experience-item';
@@ -91,6 +92,16 @@
     const single=['languages','skills','awards','activities'].includes(section)&&!card;
     return {section,recordIndex:highest||single||section==='basics'?null:card&&peers.includes(card)?peers.indexOf(card):group?0:null,context,...highest?{recordPolicy:'highestEducation'}:single?{recordPolicy:'uniqueRecord'}:{}};
   }
+  function mokaTitle(el){return text(el.closest('[class*="apply-field-"]')?.querySelector(':scope > [class*="title-"]'));}
+  function mokaContextFor(el){
+    const block=el.closest('[class*="apply-block-"]'),record=el.closest('[class*="apply-fields-"]');if(!block||!record)return null;
+    const head=block.querySelector(':scope > [class*="blockTitle-"] > div');if(!head)return null;const copy=head.cloneNode(true);copy.querySelectorAll('button').forEach(n=>n.remove());const title=text(copy).replace(/添加$/,'').trim(),peers=Array.from(block.children).filter(n=>n.matches('[class*="apply-fields-"]')&&ResumeLayout.visible(n)),index=peers.indexOf(record);
+    if(/家庭成员|社会关系/.test(title)){const roles=new Set();for(const input of shown(record,'[class*="sd-Select-container-"]'))if(/^(称谓|与本人关系|亲属关系)$/.test(mokaTitle(input))){const value=C.read(descriptor(input,record));if(value)roles.add(ResumeMatcher.familyRole(value)||'unsupported');}
+      return {section:'family',recordIndex:null,context:title,familyRole:roles.size===1&&Object.hasOwn(ResumeMatcher.familyRoles,[...roles][0])?[...roles][0]:null,familyAmbiguous:roles.size>1,matchWarning:'先选择当前家庭成员的称谓，再重新扫描'};
+    }
+    const section=/^(个人信息|基本信息)$/.test(title)?'basics':/^教育背景|^教育经历/.test(title)?'education':/^实习经历|^工作经历/.test(title)?'work':/^项目经历/.test(title)?'projects':null;
+    return section?{section,recordIndex:section==='basics'?null:index>=0?index:null,context:title}: {section:null,recordIndex:null,context:title,contextBlocked:true};
+  }
   function moduleTitle(node){
     const heading=node.querySelector(':scope > legend,:scope > h2,:scope > h3,:scope > h4,:scope > header > h2');
     if(heading)return text(heading);
@@ -116,6 +127,7 @@
     return '';
   }
   function descriptor(el,scope,config={}){
+    if(el.matches('[class*="sd-Select-container-"]'))config={...config,type:'combobox',mokaSelect:true};
     if(el.closest('.jbs_three_layers_input_wrapper'))config={...config,referencePicker:true};
     if(el.closest('.layui-form-select'))config={...config,type:'combobox',layuiSelect:true};
     const type=config.type||kind(el),radios=type==='radio'?(el.type==='radio'?query(scope,'input[type="radio"]').filter(r=>r.name===el.name&&r.name&&eligible(r)):shown(el,'input[type="radio"]')):null;
@@ -127,7 +139,7 @@
     const visibleText=ResumeLayout.collect(document).filter(n=>!selectedScope||selectedScope.root.contains(n.parent));
     for(const s of scopes(activeAdapter)){
       if(s.error){sectionIssues.push({section:s.key,error:s.error});continue;}
-      const candidates=shown(s.scope,'[role="radiogroup"],[role="combobox"],.el-select,.ant-select,input,textarea,select,[contenteditable="true"]');
+      const candidates=shown(s.scope,'[role="radiogroup"],[role="combobox"],.el-select,.ant-select,[class*="sd-Select-container-"],input,textarea,select,[contenteditable="true"]');
       const used=new Set();
       const add=(el,config={})=>{
         const configuredControl=(['combobox','cascader','radio'].includes(config.type)||config.datePanel)&&!el.disabled&&ResumeLayout.visible(el);
@@ -140,24 +152,27 @@
         const linked=(el.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>text(document.getElementById(id))).join(' ');
         const labels=Array.from(el.labels||[]).filter(ResumeLayout.visible).map(text);
         if(!labels.length&&el.closest('label')&&ResumeLayout.visible(el.closest('label')))labels.push(text(el.closest('label')));
-        const container=el.closest(s.config.fieldContainerSelector||'.el-form-item,.ant-form-item,.form-item,.form-row');
+        const container=el.closest(s.config.fieldContainerSelector||'.el-form-item,.ant-form-item,.form-item,.form-row,[class*="apply-field-"]');
         const containerLabels=container?shown(container,s.config.labelSelector||'label,.el-form-item__label,.ant-form-item-label,.field-label').map(text):[];
         const inferred=ResumeLayout.infer(el,visibleText,candidates);
         const structural=ResumeLayout.associate(el);
-        const label=config.label||structural.groupLabel||labels[0]||linked||el.getAttribute('aria-label')||structural.label||containerLabels[0]||inferred.label||el.placeholder||el.name||el.id||'未命名字段';
-        const tokens=[config.label,...labels,...containerLabels,inferred.label].filter(Boolean);
+        const mokaLabel=mokaTitle(el),effectiveMokaLabel=d.config.mokaSelect&&mokaLabel==='证件号码'?'证件类型':d.config.mokaSelect&&mokaLabel==='手机号码'?'电话区号':mokaLabel;
+        const label=config.label||effectiveMokaLabel||structural.groupLabel||labels[0]||linked||el.getAttribute('aria-label')||structural.label||containerLabels[0]||inferred.label||el.placeholder||el.name||el.id||'未命名字段';
+        const tokens=effectiveMokaLabel?[effectiveMokaLabel]:[config.label,...labels,...containerLabels,inferred.label].filter(Boolean);
         const ctx=contextFor(el,s),id=`${revision}:f${registry.size}`;
         if(!stableIds.has(el))stableIds.set(el,'node-'+(++nextStableId));
         const rect=el.getBoundingClientRect();
         const path=config.path?A.recordPath(config.path,s.index??0):null;
-        const field={id,label,tokens:tokens.length?tokens:[linked,el.getAttribute('aria-label'),el.placeholder,el.name,el.id,el.autocomplete].filter(Boolean),...ctx,type:d.type,path,value:C.read(d),required:!!el.required||el.getAttribute('aria-required')==='true'||!!container?.classList.contains('is-required'),evidence:config.path?'站点配置':labels.length||containerLabels.length?'可见关联标签':inferred.evidence||'控件属性',options:el.tagName==='SELECT'?Array.from(el.options).map(o=>o.textContent):null};
-        if(field.section==='family'){const originalGuard=d.scopeGuard;d.scopeGuard=()=>{const current=familyContextFor(el);return (!originalGuard||originalGuard())&&!!current&&current.familyRole===field.familyRole&&!current.familyAmbiguous;};}
+        const field={id,label,tokens:tokens.length?tokens:[linked,el.getAttribute('aria-label'),el.placeholder,el.name,el.id,el.autocomplete].filter(Boolean),...ctx,type:d.type,path,value:C.read(d),required:!!el.required||el.getAttribute('aria-required')==='true'||!!container?.classList.contains('is-required')||!!container?.querySelector(':scope > [class*="title-"] [class*="required-asterisk-"]'),evidence:config.path?'站点配置':labels.length||containerLabels.length?'可见关联标签':inferred.evidence||'控件属性',options:el.tagName==='SELECT'?Array.from(el.options).map(o=>o.textContent):null};
+        if(field.section==='family'){const originalGuard=d.scopeGuard;d.scopeGuard=()=>{const current=mokaContextFor(el)||familyContextFor(el);return (!originalGuard||originalGuard())&&!!current&&current.familyRole===field.familyRole&&!current.familyAmbiguous;};}
         if(/^(?:最高学历(?:毕业院校|所学专业|毕业时间|学习形式)?|最高学位)$/.test(label)){field.section='education';field.recordIndex=null;field.context='最高学历';field.recordPolicy='highestEducation';}
+        if(mokaLabel&&!d.config.mokaSelect&&el.readOnly)field.matchWarning=/出生日期/.test(mokaLabel)?'此日历需手动选择日期，本版不直接改写只读输入框':/籍贯/.test(mokaLabel)?'此多级地区需手动选择完整路径，本版不直接改写只读输入框':field.matchWarning;
         if(d.config.referencePicker)field.matchWarning='自动遍历完整路径并核对真实选中项；歧义时停止';
         if(!field.context)field.context=structural.context||inferred.context||'';
         const rangeLabel=dateRangeLabel(el);if(rangeLabel&&!config.path&&!config.label){field.label=rangeLabel;field.tokens=[rangeLabel];field.evidence='同一时间段的起止控件';}
         field.regionRole=structural.regionRole;field.regionLevel=structural.regionLevel;
         field.datePart=structural.datePart;field.datePath=structural.datePath;if(field.datePart)field.label='出生日期 · '+({year:'年',month:'月',day:'日'}[field.datePart]);
+        if(mokaLabel&&d.config.mokaSelect){const fieldRoot=el.closest('[class*="apply-field-"]'),parts=shown(fieldRoot,'[class*="sd-Select-container-"]'),i=parts.indexOf(el);if(/^(就读时间|起止时间)$/.test(mokaLabel)&&['education','work','projects'].includes(field.section)&&[2,4].includes(parts.length)&&Number.isInteger(field.recordIndex)){field.datePart=i%2?'month':'year';field.datePath=field.section+'.'+field.recordIndex+'.'+(i<2?'startDate':'endDate');field.label=(i<2?'开始日期':'结束日期')+' · '+(i%2?'月':'年');}else if(field.section==='family'&&/^出生年月$/.test(mokaLabel)&&parts.length===2){field.datePart=i?'month':'year';field.datePath=null;field.label='出生年月';}}
         if(field.section==='family')field.path=ResumeMatcher.familyPath(field);
         if(structural.label&&!config.label&&!labels.length)field.evidence=structural.evidence;
         if(field.regionLevel)field.label=label+' · '+({province:'省',city:'市',county:'区县'}[field.regionLevel]);
@@ -170,10 +185,10 @@
         lastDescriptors.set(el,entry);registry.set(id,entry);fields.push(field);
       };
       for(const config of s.config.fields||[]){const elements=shown(s.scope,config.selector);if(elements.length!==1){sectionIssues.push({section:s.key,recordIndex:s.index,error:`字段选择器未唯一命中：${config.label||config.path}`});continue;}add(elements[0],config);}
-      candidates.forEach(el=>{if(!el.parentElement?.closest('[role="combobox"],.el-select,.ant-select,[contenteditable="true"]'))add(el);});
+      candidates.forEach(el=>{if(!el.parentElement?.closest('[role="combobox"],.el-select,.ant-select,[class*="sd-Select-container-"],[contenteditable="true"]'))add(el);});
     }
     const coverage=(selectedScope?[]:activeAdapter?.sections||[]).filter(s=>s.cardSelector).map(s=>{const roots=shown(document,s.selector),present=roots.length===1?query(roots[0],s.cardSelector).length:0;return {section:s.key,expected:counts[s.key]??null,present,missing:Math.max(0,(counts[s.key]||0)-present)};});
-    const groups=new Map();for(const field of fields){const key=JSON.stringify([field.label,field.context,field.section,field.recordIndex,field.type]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(field);}
+    const groups=new Map();for(const field of fields){const key=JSON.stringify([field.label,field.context,field.section,field.recordIndex,field.type,field.datePath,field.datePart,field.familyRole]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(field);}
     for(const group of groups.values())if(group.length>1)for(const field of group){field.ambiguousLabel=true;field.matchWarning='同组同名字段，需人工选择；不自动复用答案';}
     return {fields,sectionIssues,coverage,selectedScope:selectedScope?{section:selectedScope.key,recordIndex:selectedScope.index}:null,adapter:selectedScope?null:activeAdapter?.id||null,url:location.href,origin:location.origin,page:location.pathname,fingerprint:A.fingerprint(fields)};
   }
@@ -223,15 +238,16 @@
   globalThis.ResumeFillPage={
     isBusy:()=>busy,
     describe(el){
+      el=el.closest('[class*="sd-Select-container-"]')||el;
       if(selectedScope)return {label:'区块模式请使用插件预览',ambiguousLabel:true,scopeExcluded:true};
-      const existing=Array.from(registry.values()).find(d=>d.el===el);if(existing){if(existing.field.section!=='family')return existing.field;const current={...existing.field,...familyContextFor(el),path:null};current.path=ResumeMatcher.familyPath(current);return current;}
+      const existing=Array.from(registry.values()).find(d=>d.el===el);if(existing){if(existing.field.section!=='family')return existing.field;const current={...existing.field,...(mokaContextFor(el)||familyContextFor(el)||{familyRole:null,familyAmbiguous:true}),path:null};current.path=ResumeMatcher.familyPath(current);return current;}
       const visibleText=ResumeLayout.collect(document),near=ResumeLayout.infer(el,visibleText,shown(document,'input,textarea,select'));
       const direct=Array.from(el.labels||[]).filter(ResumeLayout.visible).map(text)[0]||el.getAttribute('aria-label');
-      const structure=ResumeLayout.associate(el),resolved=dateRangeLabel(el)||direct||structure.label||near.label||el.placeholder||el.name||'未命名字段';
+      const structure=ResumeLayout.associate(el),resolved=mokaTitle(el)||dateRangeLabel(el)||direct||structure.label||near.label||el.placeholder||el.name||'未命名字段';
       const adapterScope=scopes(activeAdapter).find(s=>!s.error&&s.scope?.contains(el))||{config:{}};
       return {label:resolved,tokens:[resolved],...contextFor(el,adapterScope),regionRole:structure.regionRole,regionLevel:structure.regionLevel,datePart:structure.datePart,datePath:structure.datePath,type:kind(el)};
     },
-    async fill(el,value,referenceData){if(selectedScope)throw Error('区块模式请在插件预览中核对路径后填写');if(busy)throw Error('正在填写，请稍后');busy=true;try{const d=descriptor(el,document);d.scanUrl=location.href;d.field=this.describe(el);d.referenceData=referenceData;if(ResumeMatcher.isFamilyField(d.field)){if(!ResumeMatcher.familyPath(d.field))throw Error('请先确定家庭成员关系');const role=d.field.familyRole;d.scopeGuard=()=>familyContextFor(el)?.familyRole===role;}const result=await C.fill(d,value,true);if(result.status==='filled'){await new Promise(r=>setTimeout(r,350));return C.verify(d,value);}return result;}finally{busy=false;}}
+    async fill(el,value,referenceData){el=el.closest('[class*="sd-Select-container-"]')||el;if(selectedScope)throw Error('区块模式请在插件预览中核对路径后填写');if(busy)throw Error('正在填写，请稍后');busy=true;try{const d=descriptor(el,document);d.scanUrl=location.href;d.field=this.describe(el);d.referenceData=referenceData;if(ResumeMatcher.isFamilyField(d.field)){if(!ResumeMatcher.familyPath(d.field))throw Error('请先确定家庭成员关系');const role=d.field.familyRole;d.scopeGuard=()=>(mokaContextFor(el)||familyContextFor(el))?.familyRole===role;}const result=await C.fill(d,value,true);if(result.status==='filled'){await new Promise(r=>setTimeout(r,350));return C.verify(d,value);}return result;}finally{busy=false;}}
   };
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message.type==='RF_CANCEL'){operationController?.abort();Promise.resolve(pendingOperation).catch(()=>{}).then(()=>respond({cancelled:true}));return true;}

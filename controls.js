@@ -17,6 +17,7 @@
   function associatedMenu(d){
     const id=d.el.getAttribute('aria-controls')||d.el.getAttribute('aria-owns')||d.el.querySelector('[aria-controls],[aria-owns]')?.getAttribute('aria-controls')||d.el.querySelector('[aria-owns]')?.getAttribute('aria-owns');
     if(id){const nodes=id.split(/\s+/).map(id=>d.el.ownerDocument.getElementById(id)).filter(visible);if(nodes.length!==1)return null;return nodes[0];}
+    if(d.config?.mokaSelect){const owner=d.el.closest('[class*="sd-Dropdown-container-"]'),choices=owner?list(owner,'[class*="sd-Select-menu-"]'):[];if(choices.length>1)throw Error('Moka 下拉列表归属不唯一');return choices[0]||null;}
     if(d.config?.layuiSelect){const choices=list(d.el.closest('.layui-form-select'),'dl');if(choices.length>1)throw Error('Layui 下拉列表不唯一');return choices[0]||null;}
     const choices=menus(d.el.ownerDocument);if(visible(d.menu)&&choices.includes(d.menu))return d.menu;const fresh=choices.filter(n=>!d.beforeMenus?.has(n));if(fresh.length===1)return fresh[0];if(fresh.length>1)throw Error('展开多个弹层，无法确定归属');
     if(d.menuChanges&&!d.menuChangeOverflow){const anchor=d.el.getBoundingClientRect();const changed=choices.filter(n=>d.menuChanges.has(n)&&!n.contains(d.el)&&list(n,'[role="option"],.ant-select-item-option,.el-select-dropdown__item,.ivu-select-item').length>=2&&!n.querySelector('form,input,textarea,select,[role="grid"]')&&n.querySelectorAll('a[href]').length<2).filter(n=>{const r=n.getBoundingClientRect();return Math.min(r.right,anchor.right)>Math.max(r.left,anchor.left)&&Math.min(Math.abs(r.top-anchor.bottom),Math.abs(anchor.top-r.bottom))<100;});if(changed.length>1)throw Error('多个已有弹层同时变化，无法确定归属');if(changed.length===1)return changed[0];}
@@ -39,10 +40,10 @@
     const menu=associatedMenu(d);d.menu=menu;
     if(menu?.getAttribute('aria-busy')==='true')return [];
     if(selector){const linked=d.el.matches('[aria-controls],[aria-owns]')||d.el.querySelector('[aria-controls],[aria-owns]');return list(d.el.ownerDocument,selector).filter(n=>menu?menu.contains(n):!linked);}
-    return menu?list(menu,'[role="option"],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.ivu-select-item,dd[lay-value]'):[];
+    return menu?list(menu,d.config?.mokaSelect?'[class*="sd-Select-common-item-"]':'[role="option"],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.ivu-select-item,dd[lay-value]'):[];
   }
   function matchingOptions(elements,value,d){
-    const available=elements.filter(enabled),numeric=!d?.manualOption&&root.ResumeMatcher?.numericOptions(value,available,{...d?.field,sourcePath:d?.sourcePath});
+    const available=elements.filter(enabled),numeric=!d?.manualOption&&!d?.field?.datePart&&root.ResumeMatcher?.numericOptions(value,available,{...d?.field,sourcePath:d?.sourcePath});
     if(numeric?.handled){if(numeric.hits.length>1)throw Error(numeric.reason);return numeric.hits;}
     const exact=available.filter(o=>optionKey(o.textContent,d)===optionKey(value,d)||norm(o.getAttribute('data-value')||o.value)===norm(value));
     return exact.length?exact:available.filter(o=>root.ResumeMatcher?.optionContains(o.textContent,value,d?.field));
@@ -76,6 +77,7 @@
   }
   function read(d){
     refreshLayui(d);
+    if(d.config?.mokaSelect){const selected=d.el.querySelector('[class*="sd-Input-display-value-"]');return selected?.innerText?.trim()||'';}
     if(d.type==='radio'){const checked=d.radios.find(r=>r.checked);return checked?(checked.labels?.[0]?.innerText||checked.value).trim():'';}
     if(d.config?.readbackSelector){const nodes=list(d.scope,d.config.readbackSelector);if(nodes.length===1)return nodes[0].value??nodes[0].innerText;}
     if(d.el.tagName==='SELECT')return d.el.value===''?'':d.el.selectedOptions[0]?.textContent?.trim()||'';
@@ -198,7 +200,7 @@
     }else if(d.type==='select'){
       d.numericSelection=null;const o=await waitFor(()=>{guard(d);const found=matchingOptions(Array.from(d.el.options),value,d);if(found.length>1)throw Error('选项不唯一，已停止');return found[0];});guard(d);setValue(d.el,o.value);d.numericSelection={value:String(value),sourcePath:d.sourcePath,text:o.textContent};await settleSelection(d,value);
     }else if(d.type==='combobox'){
-      d.optionConfirmed=false;d.numericSelection=null;d.beforeMenus=new Set(menus(d.el.ownerDocument));const stopWatching=watchMenus(d);try{const alreadyOpen=(d.config?.layuiSelect||d.el.getAttribute('aria-expanded')==='true'||d.el.querySelector('[aria-expanded="true"]'))&&associatedMenu(d);if(!alreadyOpen||alreadyOpen.getAttribute('aria-busy')==='true'){d.el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));d.el.click();}
+      d.optionConfirmed=false;d.numericSelection=null;d.beforeMenus=new Set(menus(d.el.ownerDocument));const stopWatching=watchMenus(d);try{const alreadyOpen=(d.config?.layuiSelect||d.config?.mokaSelect||d.el.getAttribute('aria-expanded')==='true'||d.el.querySelector('[aria-expanded="true"]'))&&associatedMenu(d);if(!alreadyOpen||alreadyOpen.getAttribute('aria-busy')==='true'){const trigger=d.config?.mokaSelect?d.el.querySelector('input'):d.el;if(!trigger)throw Error('下拉触发控件不存在');trigger.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));trigger.click();}
       const search=d.config?.searchInputSelector?list(d.scope,d.config.searchInputSelector):d.el.matches('input')?[d.el]:list(d.el,'input');
       if(search.length>1)throw Error('搜索输入框不唯一');
       if(search[0]&&!search[0].readOnly)setValue(search[0],String(value));
