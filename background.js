@@ -1,4 +1,4 @@
-importScripts('metrics.js','profile.js','matcher.js','option-match.js','answers.js','ai.js');
+importScripts('metrics.js','ai-calibration.js','profile.js','matcher.js','option-match.js','answers.js','ai.js');
 const requests=new Map();
 let profileWriteQueue=Promise.resolve();
 chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
@@ -59,3 +59,5 @@ importScripts('desktop-bridge.js');
 importScripts('web-ocr-match.js','web-ocr-bridge.js');
 
 let metricQueue=Promise.resolve();chrome.runtime.onMessage.addListener((message,sender,respond)=>{if(message.type!=='RF_METRICS_RECORD')return;if(!sender.url?.startsWith(chrome.runtime.getURL(''))){respond({error:'仅允许扩展界面更新统计'});return;}metricQueue=metricQueue.catch(()=>{}).then(async()=>{const {localMetrics}=await chrome.storage.local.get('localMetrics');const next=ResumeMetrics.add(localMetrics,message.delta||{},crypto.randomUUID());await chrome.storage.local.set({localMetrics:next});return {ok:true};});metricQueue.then(respond,()=>respond({error:'本机统计未更新'}));return true;});
+
+let calibrationQueue=Promise.resolve();chrome.runtime.onMessage.addListener((message,sender,respond)=>{if(message.type!=='RF_AI_CALIBRATE')return;if(!sender.url?.startsWith(chrome.runtime.getURL(''))){respond({error:'仅允许扩展界面记录校准'});return;}calibrationQueue=calibrationQueue.catch(()=>{}).then(async()=>{const {aiCalibration}=await chrome.storage.local.get('aiCalibration');const next=ResumeAICalibration.append(aiCalibration,message.events||[]);await chrome.storage.local.set({aiCalibration:next});return {ok:true};});calibrationQueue.then(respond,()=>respond({error:'校准记录未保存'}));return true;});

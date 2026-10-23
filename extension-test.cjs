@@ -5,6 +5,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  const testExtension=path.join(profile,'extension');fs.mkdirSync(testExtension);
  for(const f of fs.readdirSync(__dirname).filter(f=>/\.(js|html|css|json|svg)$/.test(f)&&!['resume.json'].includes(f)))fs.copyFileSync(path.join(__dirname,f),path.join(testExtension,f));
  fs.cpSync(path.join(__dirname,'data'),path.join(testExtension,'data'),{recursive:true});
+ fs.cpSync(path.join(__dirname,'icons'),path.join(testExtension,'icons'),{recursive:true});
  // Open only the test copy's shadow root so Playwright can inspect the assistant.
  const inlineFile=path.join(testExtension,'inline.js');fs.writeFileSync(inlineFile,fs.readFileSync(inlineFile,'utf8').replace("mode:'closed'","mode:'open'"));
  fs.writeFileSync(path.join(testExtension,'desktop-connect.js'),'// Auto-pair UI has its own isolated integration suite.');const testManifest=JSON.parse(fs.readFileSync(path.join(testExtension,'manifest.json'),'utf8'));

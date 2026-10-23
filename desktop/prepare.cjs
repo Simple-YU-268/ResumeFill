@@ -28,8 +28,11 @@ fs.copyFileSync(
 const extension = path.join(dest, "extension");
 fs.mkdirSync(extension, { recursive: true });
 const files = require("../scripts/runtime-files.cjs");
-for (const f of files)
-  fs.copyFileSync(path.join(source, f), path.join(extension, f));
+for (const f of files) {
+  const target = path.join(extension, f);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(path.join(source, f), target);
+}
 fs.cpSync(path.join(source, "data"), path.join(extension, "data"), {
   recursive: true,
 });
@@ -70,6 +73,11 @@ fs.writeFileSync(
 
 for (const f of ["theme.css", "visual.js", "buddy.svg"])
   fs.copyFileSync(path.join(source, f), path.join(__dirname, "ui", f));
+fs.mkdirSync(path.join(__dirname, "ui", "icons"), { recursive: true });
+fs.copyFileSync(
+  path.join(source, "icons", "icon-48.png"),
+  path.join(__dirname, "ui", "icons", "icon-48.png"),
+);
 
 fs.writeFileSync(
   path.join(dest, "package.json"),

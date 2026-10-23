@@ -15,6 +15,8 @@ function checkRuntime(directory) {
   for (const c of manifest.content_scripts || [])
     pending.push(...(c.js || []), ...(c.css || []));
   for (const group of Object.values(manifest.icons || {})) pending.push(group);
+  for (const group of Object.values(manifest.action?.default_icon || {}))
+    pending.push(group);
   const seen = new Set();
   while (pending.length) {
     const file = pending.pop();

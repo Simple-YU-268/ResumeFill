@@ -3,6 +3,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rf-page-target-')),extension=path.join(temp,'extension');fs.mkdirSync(extension);
  for(const file of fs.readdirSync(__dirname).filter(f=>/\.(js|html|css|json|svg)$/.test(f)&&f!=='resume.json'))fs.copyFileSync(path.join(__dirname,file),path.join(extension,file));fs.cpSync(path.join(__dirname,'data'),path.join(extension,'data'),{recursive:true});
+fs.cpSync(path.join(__dirname,'icons'),path.join(extension,'icons'),{recursive:true});
  fs.writeFileSync(path.join(extension,'desktop-connect.js'),'// Auto-pair UI has its own isolated integration suite.');const manifest=JSON.parse(fs.readFileSync(path.join(extension,'manifest.json')));manifest.host_permissions=['http://127.0.0.1/*'];fs.writeFileSync(path.join(extension,'manifest.json'),JSON.stringify(manifest));
  const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html;charset=utf-8');res.end('<label>姓名<input></label>');});await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launchPersistentContext(path.join(temp,'browser'),{...(process.env.BROWSER_EXECUTABLE?{executablePath:process.env.BROWSER_EXECUTABLE}:{channel:process.env.BROWSER_CHANNEL||'msedge'}),headless:true,args:[`--load-extension=${extension}`,`--disable-extensions-except=${extension}`]});

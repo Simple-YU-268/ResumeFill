@@ -47,6 +47,18 @@ function run(scanRoot = root) {
       "a8d3ad506c0fb5be03fd68f9ed24cd1c778b75e19a8cb39e7ebbba247a1bf75b",
     "docs/images/profile-editor.png":
       "6ec7ce37cd63a9715f73ed74ac65b3d3ab40e2b41f69842ffb1d1a59154ec1c3",
+    // Generated brand icons (scripts/build-icons.cjs): pure vector buddy
+    // silhouette, no personal content; hash-pinned like the screenshots.
+    "icons/icon-16.png":
+      "4092159c08f4a68c90287370a82b710c55d419a4e0d77361079e8b3482ab6f0c",
+    "icons/icon-32.png":
+      "c126d9be5c724a63a209402fd719804325d4d55ccb0f031e52c4acddfc4723cc",
+    "icons/icon-48.png":
+      "afc3c3fc249aa9dcba5f5e6833f05a3f1351fd9a7042baa34c7839bbe4f5f0fc",
+    "icons/icon-128.png":
+      "96ebeddae32fed04806860ab565152fb1ff34025faa187742eef7543ae31c6ea",
+    "desktop/build/icon.png":
+      "04461d43b7666a20c6fb1de82d1ac87eea71765ed690f06adc39545e3b60b6e2",
   };
   function approvedImage(file) {
     return (

@@ -7,6 +7,26 @@ let tabId,
 let aiSuggestions = null,
   aiRequestId = null,
   aiRevision = null;
+let lastAIContext = { model: "", host: "local" };
+function aiCalibrationBase(settings, gateway, fallbackModel) {
+  const local = gateway?.engine === "local-rules";
+  let host = "local";
+  try {
+    if (!local && settings?.endpoint)
+      host = new URL(settings.endpoint).hostname || "local";
+  } catch {
+    /* keep local */
+  }
+  return {
+    model: local ? "local-rules" : String(settings?.model || fallbackModel || ""),
+    host,
+  };
+}
+function clampConfidence(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(1, Math.max(0, value))
+    : 0;
+}
 let autoAITimer = null,
   aiGeneration = 0;
 const autoAICache = new Map();
@@ -734,6 +754,30 @@ $("fill").onclick = () =>
         : r.verified
           ? "已回读一致，本轮跳过"
           : "未填：未匹配或没有资料";
+      if (r.aiApplied && result) {
+        const outcome = [
+          "verified",
+          "failed",
+          "unconfirmed",
+          "preserved",
+          "stale",
+        ].includes(result.status)
+          ? result.status
+          : "unconfirmed";
+        void ResumeAICalibration.record([
+          {
+            v: 1,
+            ts: Date.now(),
+            kind: "match",
+            event: "readback",
+            ...lastAIContext,
+            confidence: r.aiApplied.confidence,
+            path: r.aiApplied.path,
+            outcome,
+          },
+        ]);
+      }
+      r.aiApplied = null;
     });
     for (const r of rows) {
       const result = final.get(r.field.id);
@@ -931,6 +975,25 @@ function optionAIButton(r, candidates, select, box) {
         return;
       }
       select.value = candidate.text;
+      const { aiSettings: optionSettings } =
+        await chrome.storage.local.get("aiSettings");
+      r.optionAIContext = aiCalibrationBase(
+        optionSettings,
+        result.gateway,
+        result.model,
+      );
+      r.optionAIConfidence = clampConfidence(suggestion.confidence);
+      void ResumeAICalibration.record([
+        {
+          v: 1,
+          ts: Date.now(),
+          kind: "option",
+          event: "proposed",
+          ...r.optionAIContext,
+          confidence: r.optionAIConfidence,
+          path: r.select.value,
+        },
+      ]);
       status(
         `${result.gateway?.engine === "local-rules" ? "本地规则（未调用模型） " : result.gateway ? "模型网关 " : ""}建议：${candidate.text}（${Math.round(suggestion.confidence * 100)}%）${suggestion.reason}；核对后点击填写并记住。`,
       );
@@ -983,6 +1046,30 @@ function renderOptions(r, candidates) {
       }
       r.verified = true;
       r.small.textContent = "用户确认选项，回读一致";
+      if (r.optionAIContext) {
+        void ResumeAICalibration.record([
+          {
+            v: 1,
+            ts: Date.now(),
+            kind: "option",
+            event: "applied",
+            ...r.optionAIContext,
+            confidence: r.optionAIConfidence ?? 0,
+            path: r.select.value,
+          },
+          {
+            v: 1,
+            ts: Date.now(),
+            kind: "option",
+            event: "readback",
+            ...r.optionAIContext,
+            confidence: r.optionAIConfidence ?? 0,
+            path: r.select.value,
+            outcome: "verified",
+          },
+        ]);
+        r.optionAIContext = null;
+      }
       box.remove();
       status("已填写并按站点、字段和原始值记住选项映射。");
     });
@@ -1070,6 +1157,18 @@ function applyAISuggestions(matches, automatic = false) {
       r.select.value = m.path;
       if (r.select.value !== m.path) continue;
       r.update();
+      r.aiApplied = { confidence: clampConfidence(m.confidence), path: m.path };
+      void ResumeAICalibration.record([
+        {
+          v: 1,
+          ts: Date.now(),
+          kind: "match",
+          event: "applied",
+          ...lastAIContext,
+          confidence: clampConfidence(m.confidence),
+          path: m.path,
+        },
+      ]);
       r.small.textContent = `AI 建议 ${Math.round(m.confidence * 100)}%：${m.reason} · 请核对后填写`;
       count++;
     }
@@ -1178,6 +1277,35 @@ async function requestFieldAI(automatic = false) {
     if (activeTab?.id !== tabId || activeTab?.url !== snapshot.url)
       throw Error("当前页面已切换，AI 建议已丢弃，请重新扫描");
     aiSuggestions = response.accepted;
+    lastAIContext = aiCalibrationBase(aiSettings, response.gateway, response.model);
+    void ResumeAICalibration.record(
+      response.accepted
+        .map((m) => ({
+          v: 1,
+          ts: Date.now(),
+          kind: "match",
+          event: "proposed",
+          ...lastAIContext,
+          confidence: clampConfidence(m.confidence),
+          path: m.path,
+        }))
+        .concat(
+          (response.rejected || []).map((m) => ({
+            v: 1,
+            ts: Date.now(),
+            kind: "match",
+            event: "filtered",
+            ...lastAIContext,
+            confidence: clampConfidence(m.confidence),
+            path: m.path || "",
+            filter: /置信度/.test(m.error || "")
+              ? "confidence"
+              : /候选范围|模块不一致/.test(m.error || "")
+                ? "scope"
+                : "protocol",
+          })),
+        ),
+    );
     void ResumeMetrics.record({
       aiRequests: cached ? 0 : 1,
       aiAccepted: response.accepted.length,

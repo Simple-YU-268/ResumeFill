@@ -40,6 +40,12 @@ desktop/ui/buddy.svg
 !docs/images/desktop-overview.png
 !docs/images/profile-editor.png
 
+# Generated, hash-pinned brand icons (scripts/build-icons.cjs)
+!icons/
+!icons/*.png
+!desktop/build/
+!desktop/build/icon.png
+
 # Prepared copies of shared profile editor sources
 desktop/ui/profile-editor.js
 desktop/ui/structured-fields.js

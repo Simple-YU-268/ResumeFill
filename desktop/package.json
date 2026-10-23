@@ -1,6 +1,6 @@
 {
   "name": "resumefill-desktop",
-  "version": "0.25.2",
+  "version": "0.25.3",
   "description": "ResumeFill dedicated application agent",
   "author": "ResumeFill",
   "main": "main.cjs",
@@ -20,6 +20,7 @@
   "build": {
     "appId": "local.resumefill.agent",
     "productName": "ResumeFill Agent",
+    "icon": "build/icon.png",
     "publish": [
       {
         "provider": "github",

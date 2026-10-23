@@ -1,12 +1,12 @@
 # Public release privacy review
 
-Reviewed for v0.25.2 on 2026-10-22. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
+Reviewed for v0.25.3 on 2026-10-23. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
 
 Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
 
 The desktop-to-extension difference preview stays on the local authenticated connection. No profile values are sent to AI by this flow. Only selected changes are applied; website-learned answers and local-only fields are preserved, and a single pre-sync profile backup is stored in the extension's trusted local storage. Tests use synthetic profiles and isolated browser directories.
 
-Two product screenshots in `docs/images/` were rendered from synthetic data and visually reviewed. They contain no real candidate information. Only their exact paths and SHA-256 hashes are allowed by the publication scanner; changed images require another review, and other PNG/JPEG files remain blocked. These are documentation assets, not screenshots of the user's live application pages.
+Two product screenshots in `docs/images/` were rendered from synthetic data and visually reviewed. They contain no real candidate information. The extension and desktop icons in `icons/` and `desktop/build/icon.png` are generated from a vector buddy silhouette by `scripts/build-icons.cjs` and contain no personal content. Only these exact paths and SHA-256 hashes are allowed by the publication scanner; changed images require another review, and other PNG/JPEG files remain blocked. These are documentation and brand assets, not screenshots of the user's live application pages.
 
 The development workspace contains private files. This review applies only to the Git publication inventory and freshly built release runtime, not to every file elsewhere on the machine.
 
@@ -43,6 +43,7 @@ Webpage OCR screenshots are sent only to the authenticated local desktop endpoin
 - AI dropdown matching requires user value-sharing consent and now rejects identity numbers, bank accounts and private contact fields. Local unique matches and numeric ambiguity decisions do not call the model. Field matching still excludes values by default; bounded basic candidate expansion sends paths only.
 - Web OCR reuses one local child process, retains language models in memory, and disposes it after five idle minutes, cancellation, error or shutdown. Screenshots are processed in memory and are not logged or stored. No OCR cloud service is used.
 - Aggregate statistics contain counters only; no field labels, values, page addresses or prompts. Extension counters stay in trusted local storage; desktop aggregates them over the authenticated loopback connection and stores local counter snapshots. No external telemetry is sent.
+- AI calibration events (0.25.3) record only timestamp, event kind, model name, gateway hostname, resume field path (such as `basics.email`) and a 0–1 confidence number — never resume values, option text, page labels, URLs or prompts. They stay in the extension's trusted local storage in a 500-entry ring and are never sent anywhere; recording failures are silently ignored and cannot block filling.
 - Corrupt settings are backed up locally before creating safe defaults; model keys are cleared and old automatic grants are not copied into the replacement configuration.
 - Publication scanning covers two-character Chinese names, family identities, redacted finding paths and vendor archive content; any archive read failure fails the gate. Prepared resource directories are recreated and executable/style references are verified.
 
