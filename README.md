@@ -4,7 +4,7 @@
 <p align="center">少填一点，多一点可能。<br>一份个人资料，复用到不同招聘表单。</p>
 <p align="center"><a href="https://github.com/Simple-YU-268/ResumeFill/releases/latest">下载 Windows 版</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/wiki">产品 Wiki</a> · <a href="docs/wiki/Getting-Started.md">安装指南</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/issues">反馈问题</a></p>
 
-**开发测试版：0.26.0（尚未正式发行）** · Windows 桌面端 + Chrome / Edge 扩展 · MIT 开源
+**开发测试版：0.27.0（尚未正式发行）** · Windows 桌面端 + Chrome / Edge 扩展 · MIT 开源
 
 ResumeFill 是本地优先的简历填表 Agent：把个人资料整理成可视化表单与 JSON，依据招聘网页实际显示的标签、位置和经历分组匹配字段，核对后填写并回读验证。遇到陌生字段，可由 AI 提供建议；模型启用后可主动复核较弱匹配，状态区会标明是否实际使用模型。你手动填写的内容也能经过确认后学习为新资料。最终申请由你提交。
 

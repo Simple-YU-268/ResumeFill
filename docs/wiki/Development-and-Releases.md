@@ -56,3 +56,6 @@ npm run privacy:artifacts
 - CSS 来源：<http://cdn.cpta.com.cn/student_html_yc/libs/layui/css/layui.css>
 
 测试脚本校验固定 SHA256（见 `scripts/test-real-layui.cjs`），资源变化时停止执行；不会自动下载或更新资源，也不将第三方组件放入源码与发行包。加载后阻断全部网络请求，验证普通/可搜索下拉与静态/重绘的四种组合，使用合成资料。组件测试通过不代表真实网站业务联动已经验证。
+
+
+0.27.0 新增 `agent-recovery-test.cjs`（纯协议及 HTTP）和 `agent-recovery-browser-test.cjs`（实际安装 Edge 扩展）。合成页面覆盖异步选项、重绘、依赖、取消与保护边界。当前仅为开发测试包，真实站点与成功 Live AI 门禁仍待满足。

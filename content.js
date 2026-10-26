@@ -168,6 +168,19 @@
     crypto.getRandomValues(new Uint8Array(16)),
     (b) => b.toString(16).padStart(2, "0"),
   ).join("");
+  const recoveryScopes = new WeakMap();
+  let recoveryScopeCounter = 0;
+  function recoveryScope(el) {
+    const owner =
+      el.parentElement?.closest(
+        '.el-form-item,.ant-form-item,.form-item,.form-row,.layui-form-item,[class*="apply-field-"],[data-resume-record],label,fieldset,section,form',
+      ) ||
+      el.parentElement ||
+      el.getRootNode();
+    if (!recoveryScopes.has(owner))
+      recoveryScopes.set(owner, "scope-" + ++recoveryScopeCounter);
+    return recoveryScopes.get(owner);
+  }
   const rootIds = new WeakMap();
   let rootCounter = 0;
   function rootId(el) {
@@ -887,6 +900,7 @@
         const field = {
           id,
           rootId: rootId(el),
+          scopeId: recoveryScope(el),
           ...(d.root?.host
             ? { shadowScope: shadowDocumentKey + ":" + rootId(el) }
             : {}),
@@ -1363,6 +1377,7 @@
           id: item.id,
           status: "failed",
           error: e.message,
+          ...(e.code ? { code: e.code } : {}),
           candidates,
           ...(e.diagnostic ? { diagnostic: e.diagnostic } : {}),
         });

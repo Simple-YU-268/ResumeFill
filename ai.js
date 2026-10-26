@@ -12,11 +12,11 @@
     return 'HTTP '+status+'：请检查服务配置或稍后重试';
   }
   function toolFailure(error,tool){
-    const labels={match_fields:'AI 字段匹配',observe_page:'页面扫描',verify_fields:'字段回读',fill_fields:'字段填写'},text=String(error?.message||''),known=String(error?.code||'');
+    const labels={plan_recovery:'AI 恢复规划',wait_page:'等待页面稳定',match_fields:'AI 字段匹配',observe_page:'页面扫描',verify_fields:'字段回读',fill_fields:'字段填写'},text=String(error?.message||''),known=String(error?.code||'');
     const http=Number(known.match(/^RF_AGENT_HTTP_(\d{3})$/)?.[1]||text.match(/HTTP\s+(\d{3})/i)?.[1]);
     if([401,402,403,404,429,500,502,503,504].includes(http))return {code:'RF_AGENT_HTTP_'+http,message:(labels[tool]||'工具')+'失败：'+httpError(http)};
-    const code=/^RF_AGENT_(TIMEOUT|PAGE_CHANGED|CANDIDATES|CONNECTION)$/.test(known)?known:/超时|取消|AbortError/.test(text+' '+error?.name)?'RF_AGENT_TIMEOUT':/页面.*变|字段.*变|已失效|控件/.test(text)?'RF_AGENT_PAGE_CHANGED':/候选|JSON|协议|校验/.test(text)?'RF_AGENT_CANDIDATES':'RF_AGENT_CONNECTION';
-    const reasons={RF_AGENT_TIMEOUT:'请求超时或取消，请重试；扩展请求最多等待 25 秒，本机网关模型默认 20 秒',RF_AGENT_PAGE_CHANGED:'页面或字段已变化，请重新扫描后继续',RF_AGENT_CANDIDATES:'候选资料或模型响应未通过校验，请检查资料和模型兼容性',RF_AGENT_CONNECTION:'服务连接或工具调用失败，请检查桌面连接与“保存并测试模型”结果'};
+    const code=/^RF_AGENT_(TIMEOUT|PAGE_CHANGED|DOCUMENT_CHANGED|PROFILE_CHANGED|SCOPE_CHANGED|CANDIDATES|CONNECTION)$/.test(known)?known:/超时|取消|AbortError/.test(text+' '+error?.name)?'RF_AGENT_TIMEOUT':/页面.*变|字段.*变|已失效|控件/.test(text)?'RF_AGENT_PAGE_CHANGED':/候选|JSON|协议|校验/.test(text)?'RF_AGENT_CANDIDATES':'RF_AGENT_CONNECTION';
+    const reasons={RF_AGENT_DOCUMENT_CHANGED:'表单文档已变化，请重新选择并扫描',RF_AGENT_PROFILE_CHANGED:'本地资料已变化，请重新核对字段',RF_AGENT_SCOPE_CHANGED:'字段或记录归属变化，请重新核对',RF_AGENT_TIMEOUT:'请求超时或取消，请重试；扩展请求最多等待 25 秒，本机网关模型默认 20 秒',RF_AGENT_PAGE_CHANGED:'页面或字段已变化，请重新扫描后继续',RF_AGENT_CANDIDATES:'候选资料或模型响应未通过校验，请检查资料和模型兼容性',RF_AGENT_CONNECTION:'服务连接或工具调用失败，请检查桌面连接与“保存并测试模型”结果'};
     return {code,message:(labels[tool]||'工具')+'失败：'+reasons[code]};
   }
   function settings(data){

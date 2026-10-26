@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.26.0 on 2026-10-26. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
+Reviewed for v0.27.0 on 2026-10-26. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
 
 Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
 
@@ -13,6 +13,10 @@ The development workspace contains private files. This review applies only to th
 ## 0.26.0 document and record boundaries
 
 Work record types are local metadata and excluded from matching candidates. Record assignments are bound to document-local modules, topology and a canonical SHA-256 profile digest; they are not sent to a model. Document chooser URLs omit query strings and fragments. Diagnostics contain reason codes and frame IDs, not field values. Cross-origin and opaque documents are not filled. Open shadow roots are processed within their own label/menu roots; closed roots are not inspected. Architecture fixtures use only synthetic records and local servers.
+
+## 0.27.0 bounded recovery
+
+Recovery model packets contain only opaque field IDs, control types, categorical failure codes and fixed budgets. No labels, URLs, selectors or profile values are sent by recovery planning. Local identity keys remain on the authenticated local connection. Rebinding requires the same document/root/container and unique identity. Tests and screenshots use synthetic profiles. Live verification failed authentication before inference; no successful real-model claim is made.
 
 ## Publication boundary
 

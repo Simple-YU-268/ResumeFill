@@ -1,0 +1,72 @@
+{
+  "productVersion": "0.27.0",
+  "date": "2026-10-26",
+  "distribution": "development-test",
+  "unit": {
+    "groups": 15,
+    "status": "passed"
+  },
+  "browser": {
+    "groups": 25,
+    "status": "passed-with-targeted-rerun",
+    "actualInstalledExtensionRecovery": true,
+    "fixtures": "synthetic-only, explicitly accepted by user",
+    "execution": "First 24 groups passed in full run; final integration initially failed on supplemental-path guard, fixed and rerun passed. Recovery and architecture/failure cases rerun after change.",
+    "supplementalPathsRegression": "passed: custom and scoped learned answers, 20 authorized fields"
+  },
+  "desktop": {
+    "unitAndRendererGroups": 6,
+    "integrationGroups": 3,
+    "status": "passed",
+    "profileAndPairingPreserved": true
+  },
+  "electronGui": {
+    "status": "skipped",
+    "groups": 4,
+    "reason": "Process failed to launch"
+  },
+  "visual": {
+    "popupWidth": 620,
+    "horizontalOverflow": false,
+    "keyboardFocus": "passed in visual regression",
+    "reviewedSyntheticScreenshot": true
+  },
+  "aiMock": {
+    "status": "passed",
+    "valuesSent": false,
+    "recoveryPlanRescanRebindVerify": true
+  },
+  "aiLive": {
+    "status": "blocked",
+    "provider": "openrouter.ai",
+    "httpStatus": 401,
+    "modelInferenceStarted": false,
+    "valuesSent": false,
+    "scriptSha256": "81524d2546740b64f6fc3fffc59ba9d8d37cd00f1f8f5699fbbda199d616aacf",
+    "time": "2026-10-26T02:28:58.290Z"
+  },
+  "realRecruitingSite": {
+    "status": "not-verified",
+    "userAcceptedConstructedFixtures": true,
+    "applicationSubmitted": false
+  },
+  "formalRelease": {
+    "status": "blocked",
+    "reason": "Live AI authentication 401; no real recruiting site evidence"
+  },
+  "sourcePrivacy": {
+    "status": "passed",
+    "identityReferenceUsed": true
+  },
+  "artifactPrivacy": {
+    "status": "passed",
+    "itemsChecked": 1109,
+    "identityReferenceUsed": true
+  },
+  "packageConsistency": {
+    "extensionAndGateway": "passed",
+    "sharedProfileEditor": "passed",
+    "installerDigestAndUpdateMetadata": "passed"
+  },
+  "installerSignature": "NotSigned"
+}

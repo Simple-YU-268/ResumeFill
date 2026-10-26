@@ -194,7 +194,11 @@
           return;
         }
         if (Date.now() - started >= timeout) {
-          reject(Error("等待页面状态超时"));
+          reject(
+            Object.assign(Error("等待页面状态超时"), {
+              code: "RF_CONTROL_TIMEOUT",
+            }),
+          );
           return;
         }
         setTimeout(poll, 60);

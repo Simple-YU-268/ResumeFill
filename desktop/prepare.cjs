@@ -38,6 +38,7 @@ fs.cpSync(path.join(source, "data"), path.join(extension, "data"), {
 });
 for (const f of [
   "ai.js",
+  "agent-recovery.js",
   "matcher.js",
   "option-match.js",
   "answers.js",

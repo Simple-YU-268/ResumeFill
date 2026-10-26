@@ -1430,9 +1430,13 @@ async function refreshAgent() {
       interrupted: "后台已中断",
     };
     $("agentStatus").textContent =
-      `Agent：${names[s?.status] || "中断"} · ${s?.steps || 0} 步 · 回读 ${s?.counts?.verified || 0}/${s?.counts?.approved || 0} · 未核对 ${s?.counts?.unbound || 0}\n${agentRun.error || s?.reason || s?.pending?.name || ""}`;
+      `Agent：${names[s?.status] || "中断"} · ${s?.steps || 0} 步 · 回读 ${s?.counts?.verified || 0}/${s?.counts?.approved || 0} · 未核对 ${s?.counts?.unbound || 0}\n${agentRun.error || s?.reason || { observe_page: "正在重新扫描", verify_fields: "正在核对结果", fill_fields: "正在填写授权字段", match_fields: "正在匹配未解决字段", wait_page: "等待页面稳定", plan_recovery: "正在选择恢复策略" }[s?.pending?.name] || ""}\n自动恢复 ${s?.recovery?.used || 0}/${s?.recovery?.max || 3} · ${{ model: "AI 策略", local: "本地策略", "local-fallback": "本地兜底" }[s?.recovery?.source] || "尚未执行"}`;
     for (const r of rows) {
-      const outcome = s?.fields?.find((f) => f.stableId === r.field.stableId);
+      const outcome = s?.fields?.find(
+        (f) =>
+          f.stableId === r.field.stableId ||
+          f.previousStableIds?.includes(r.field.stableId),
+      );
       if (outcome)
         r.small.textContent =
           "Agent：" + (labels[outcome.status] || outcome.status);
@@ -1449,19 +1453,25 @@ async function startAgent(resumeTask = false) {
   if (agentRunning) throw Error("Agent 正在运行");
   const bindings = rows
     .filter((r) => r.select.value && values[r.select.value])
-    .map((r) => ({
-      stableId: r.field.stableId,
-      signature: JSON.stringify([
-        r.field.label,
-        r.field.section,
-        r.field.recordIndex,
-        r.field.type,
-      ]),
-      path: r.select.value,
-    }));
+    .map((r) => {
+      const field = ResumeMatcher.resolveField(r.field, values) || r.field;
+      return {
+        stableId: field.stableId,
+        recoveryKey: ResumeRecovery.identity(field),
+        signature: JSON.stringify([
+          field.label,
+          field.section,
+          field.recordIndex,
+          field.type,
+        ]),
+        path: r.select.value,
+      };
+    });
   const r = await agentMessage("RF_AGENT_START", {
     tabId,
     url: snapshot.url,
+    documentId: snapshot.frameDocumentId,
+    recoveryEnabled: $("agentRecovery").checked,
     bindings,
     ...(resumeTask ? { resumeRunId: lastAgentRun?.runId } : {}),
   });
