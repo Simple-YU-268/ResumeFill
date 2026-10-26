@@ -32,7 +32,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(['RF_ASSIST_DATA','RF_ASSIST_SAVE','RF_FAMILY_LEARN'].includes(message.type)){
     if(sender.id!==chrome.runtime.id||!sender.tab||!((/^https?:/.test(sender.url||'')&&new URL(sender.url).origin===new URL(sender.tab.url).origin)||(sender.url==='about:srcdoc'&&sender.origin===new URL(sender.tab.url).origin))){respond({error:'仅允许已启用的网页助手使用'});return;}
     const perform=async()=>{const {resume}=await chrome.storage.local.get('resume');if(!resume)throw Error('请先保存简历');
-      if(message.type==='RF_ASSIST_DATA')return {resume};
+      if(message.type==='RF_ASSIST_DATA')return {resume,workProfile:await ResumeMatcher.workProfile(resume)};
       const f=message.field;if(!f||typeof f.label!=='string'||f.label.length>500||typeof message.value!=='string')throw Error('资料格式无效');
       if(message.type==='RF_FAMILY_LEARN'){
         const {autoFamilyLearning}=await chrome.storage.local.get('autoFamilyLearning');if(!autoFamilyLearning)return {ignored:true};

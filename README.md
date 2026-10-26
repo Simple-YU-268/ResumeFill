@@ -4,7 +4,7 @@
 <p align="center">少填一点，多一点可能。<br>一份个人资料，复用到不同招聘表单。</p>
 <p align="center"><a href="https://github.com/Simple-YU-268/ResumeFill/releases/latest">下载 Windows 版</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/wiki">产品 Wiki</a> · <a href="docs/wiki/Getting-Started.md">安装指南</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/issues">反馈问题</a></p>
 
-**开发测试版：0.25.0（尚未正式发行）** · Windows 桌面端 + Chrome / Edge 扩展 · MIT 开源
+**开发测试版：0.26.0（尚未正式发行）** · Windows 桌面端 + Chrome / Edge 扩展 · MIT 开源
 
 ResumeFill 是本地优先的简历填表 Agent：把个人资料整理成可视化表单与 JSON，依据招聘网页实际显示的标签、位置和经历分组匹配字段，核对后填写并回读验证。遇到陌生字段，可由 AI 提供建议；模型启用后可主动复核较弱匹配，状态区会标明是否实际使用模型。你手动填写的内容也能经过确认后学习为新资料。最终申请由你提交。
 
@@ -38,7 +38,9 @@ ResumeFill 是本地优先的简历填表 Agent：把个人资料整理成可视
 
 网页填完后，点击 **重新扫描并学习已填内容**。已有同义字段归入原资料，陌生字段保存为带网站、区块和经历序号的补充答案。修改项默认不选；敏感资料需单独确认。保存前再次检查网页值和本地资料，并保留一次学习前备份。
 
-它只读取当前可见表单和可见同源 iframe，不读取其他分页、附件或未展开项。密码、验证码、安全答案、占位和已识别的脱敏内容不学习；学习不向 AI 发送读取的值。详见 [资料与表单学习](docs/wiki/Profile-and-Learning.md)。
+它只读取当前可见表单、可见同源 iframe、经验证的同源 srcdoc 和开放 Shadow DOM，不读取其他分页、附件或未展开项。密码、验证码、安全答案、占位和已识别的脱敏内容不学习；学习不向 AI 发送读取的值。详见 [资料与表单学习](docs/wiki/Profile-and-Learning.md)。
+
+0.26.0 新增“选择表单文档”和“扫描诊断”，以及工作/实习类型与独立记录分配。未分类记录需核对，重复分配会阻止填写。详见 [0.26.0 开发测试版说明](docs/releases/0.26.0.md)。
 
 ## 隐私与实际边界
 

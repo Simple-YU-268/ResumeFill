@@ -164,6 +164,10 @@
         })),
     };
   }
+  const shadowDocumentKey = Array.from(
+    crypto.getRandomValues(new Uint8Array(16)),
+    (b) => b.toString(16).padStart(2, "0"),
+  ).join("");
   const rootIds = new WeakMap();
   let rootCounter = 0;
   function rootId(el) {
@@ -572,7 +576,22 @@
     const single =
       ["languages", "skills", "awards", "activities"].includes(section) &&
       !card;
+    if (
+      section === "work" &&
+      group &&
+      /工作|实习/.test(context) &&
+      !workModules.has(group)
+    )
+      workModules.set(group, "work-module-" + ++nextWorkModule);
     return {
+      ...(section === "work" && group && /工作|实习/.test(context)
+        ? {
+            workModuleId: workModules.get(group),
+            moduleRecordIndex:
+              card && peers.includes(card) ? peers.indexOf(card) : 0,
+            employmentType: /实习/.test(context) ? "internship" : "employment",
+          }
+        : {}),
       section,
       recordIndex:
         highest || single || section === "basics"
@@ -868,6 +887,9 @@
         const field = {
           id,
           rootId: rootId(el),
+          ...(d.root?.host
+            ? { shadowScope: shadowDocumentKey + ":" + rootId(el) }
+            : {}),
           label,
           tokens: tokens.length
             ? tokens
@@ -1136,7 +1158,11 @@
       workAssignments = {};
       workTopology = topology;
     }
-    if (binding.assignments && binding.topology === topology)
+    if (
+      binding.assignments &&
+      binding.topology === topology &&
+      binding.profileKey === workProfile?.key
+    )
       workAssignments = { ...binding.assignments };
     const workBindings = ResumeMatcher.bindWork(
       fields,
@@ -1463,6 +1489,9 @@
       ) || { config: {} };
       return {
         label: resolved,
+        ...(el.getRootNode().host
+          ? { shadowScope: shadowDocumentKey + ":" + rootId(el) }
+          : {}),
         tokens: [resolved],
         ...contextFor(el, adapterScope),
         ...(mokaContextFor(el)?.section === "work"
@@ -1583,6 +1612,7 @@
           profile: message.workProfile,
           assignments: message.workAssignments,
           topology: message.workTopology,
+          profileKey: message.workAssignmentProfileKey,
         });
       if (message.type === "RF_LEARN_READ") {
         if (location.href !== scannedUrl)

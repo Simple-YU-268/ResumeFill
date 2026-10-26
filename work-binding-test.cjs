@@ -6,3 +6,5 @@ fields=make();M.bindWork(fields,profile,{'module-0:0':2,'module-1:0':2});assert.
 fields=make();M.bindWork(fields,profile,{'module-0:0':0});assert.equal(fields[0].workBindingRequired,true);
 assert.equal(M.flatten({work:[{employmentType:'internship',company:'Synthetic'}]})['work.0.employmentType'],undefined);
 assert.ok(!M.resolveField(fields[0],{'work.0.company':'Synthetic'}));console.log('PASS: typed work allocation, original indices, unknown/manual conflict, wrong type refusal and metadata exclusion');
+
+const A=require('./answers');const page={origin:'https://synthetic.example',page:'/form',url:'https://synthetic.example/form'};const f={label:'Synthetic custom',type:'input',shadowScope:'document-a:root-1'};const r=A.save({},[{field:f,value:'Synthetic answer'}],page);assert.ok(A.match(f,r,page));assert.equal(A.match({...f,shadowScope:'document-a:root-2'},r,page),null);assert.equal(A.match({...f,shadowScope:'document-b:root-1'},r,page),null);

@@ -217,7 +217,6 @@ function requireFormTab(tab) {
 }
 let selectedDocumentId = null;
 let workAssignments = {},
-  workBaseline = "",
   reuseAssignments = false;
 async function scan(incremental = false, learning = false) {
   clearLearning();
@@ -305,7 +304,11 @@ async function scan(incremental = false, learning = false) {
       documentId: selectedDocumentId,
       workProfile: await ResumeMatcher.workProfile(resume),
       ...(reuseAssignments
-        ? { workAssignments, workTopology: snapshot?.workTopology }
+        ? {
+            workAssignments,
+            workTopology: snapshot?.workTopology,
+            workAssignmentProfileKey: snapshot?.workProfileKey,
+          }
         : {}),
       adapters: data.adapters || { version: 1, adapters: [] },
       counts: Object.fromEntries(

@@ -1,0 +1,73 @@
+{
+  "productVersion": "0.26.0",
+  "date": "2026-10-26",
+  "distribution": "development-test",
+  "unit": {
+    "groups": 14,
+    "status": "passed"
+  },
+  "browser": {
+    "groups": 24,
+    "status": "passed",
+    "installedExtensionArchitecture": true,
+    "postSuiteTargetedWorkAssignmentProfileBinding": "passed"
+  },
+  "desktop": {
+    "unitAndRendererGroups": 6,
+    "integrationGroups": 3,
+    "status": "passed",
+    "profileAndPairingPreserved": true
+  },
+  "electronGui": {
+    "status": "skipped",
+    "groups": 4,
+    "reason": "Process failed to launch"
+  },
+  "visual": {
+    "popupWidth": 620,
+    "desktopWidths": [
+      700,
+      1280
+    ],
+    "horizontalOverflow": false,
+    "keyboardFocus": "passed",
+    "fixtures": "synthetic-only"
+  },
+  "aiMock": {
+    "status": "passed",
+    "valuesSent": false,
+    "verifiedFields": 4
+  },
+  "aiLive": {
+    "status": "blocked",
+    "provider": "openrouter.ai",
+    "httpStatus": 401,
+    "modelInferenceStarted": false,
+    "valuesSent": false,
+    "evidence": "dist/ai-live-verification.json"
+  },
+  "realRecruitingSite": {
+    "status": "not-verified",
+    "applicationSubmitted": false,
+    "profileSaved": false
+  },
+  "formalRelease": {
+    "status": "blocked",
+    "reasons": [
+      "real-site-validation-missing",
+      "live-ai-401"
+    ]
+  },
+  "knownLimits": [
+    "cross-origin iframe diagnostic only",
+    "closed Shadow DOM unsupported",
+    "Moka readonly widgets still require adapters",
+    "unstructured shadow answers require review after document recreation"
+  ],
+  "packaging": {
+    "signed": false,
+    "privacy": "passed",
+    "privacyFilesChecked": 1103,
+    "runtimeMatchesSource": true
+  }
+}

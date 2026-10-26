@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.25.3 on 2026-10-23. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
+Reviewed for v0.26.0 on 2026-10-26. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
 
 Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
 
@@ -9,6 +9,10 @@ The desktop-to-extension difference preview stays on the local authenticated con
 Two product screenshots in `docs/images/` were rendered from synthetic data and visually reviewed. They contain no real candidate information. The extension and desktop icons in `icons/` and `desktop/build/icon.png` are generated from a vector buddy silhouette by `scripts/build-icons.cjs` and contain no personal content. Only these exact paths and SHA-256 hashes are allowed by the publication scanner; changed images require another review, and other PNG/JPEG files remain blocked. These are documentation and brand assets, not screenshots of the user's live application pages.
 
 The development workspace contains private files. This review applies only to the Git publication inventory and freshly built release runtime, not to every file elsewhere on the machine.
+
+## 0.26.0 document and record boundaries
+
+Work record types are local metadata and excluded from matching candidates. Record assignments are bound to document-local modules, topology and a canonical SHA-256 profile digest; they are not sent to a model. Document chooser URLs omit query strings and fragments. Diagnostics contain reason codes and frame IDs, not field values. Cross-origin and opaque documents are not filled. Open shadow roots are processed within their own label/menu roots; closed roots are not inspected. Architecture fixtures use only synthetic records and local servers.
 
 ## Publication boundary
 
