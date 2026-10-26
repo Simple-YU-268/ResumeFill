@@ -15,9 +15,10 @@
      if(!visible)break;view=view.parent;
    }}catch{visible=false;reason='CROSS_ORIGIN_OR_OPAQUE';}
    const embedded=Array.from(document.querySelectorAll('iframe')).map(f=>{let kind='unknown';try{kind=f.hasAttribute('srcdoc')?'srcdoc':new URL(f.src,location.href).origin===location.origin?'same-origin':'cross-origin';}catch{}return {kind};});
+   if(srcdocVerified&&visible){try{origin=window.top.location.origin;}catch{visible=false;reason='CROSS_ORIGIN_OR_OPAQUE';}}
    return {url:location.href,origin,srcdocVerified,visible,reason,embedded,ready:!!globalThis.__resumeFillV2,runtimeVersion:globalThis.__resumeFillRuntime?.version,runtimeProtocol:globalThis.__resumeFillRuntime?.protocol};
  }});}
- function eligible(info,origin){return info?.visible&&info.origin===origin&&/^https?:/.test(info.url);}
+ function eligible(info,origin){return info?.visible&&info.origin===origin&&(/^https?:/.test(info.url)||info.url==='about:srcdoc'&&info.srcdocVerified);}
  async function prepare(tabId){const tab=await chrome.tabs.get(tabId),origin=new URL(tab.url).origin;for(const f of await frameInfo(tabId))if(eligible(f.result,origin)&&f.result.ready)requireRuntime(f.result);}
  async function scan(tabId,message){
   const tab=await chrome.tabs.get(tabId),origin=new URL(tab.url).origin,frames=await frameInfo(tabId),choices=[],documents=[],diagnostics=[];
