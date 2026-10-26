@@ -18,7 +18,9 @@ function aiCalibrationBase(settings, gateway, fallbackModel) {
     /* keep local */
   }
   return {
-    model: local ? "local-rules" : String(settings?.model || fallbackModel || ""),
+    model: local
+      ? "local-rules"
+      : String(settings?.model || fallbackModel || ""),
     host,
   };
 }
@@ -200,6 +202,9 @@ function requireFormTab(tab) {
     throw Error("当前标签页已失效，请重新打开插件");
   return tab;
 }
+let workAssignments = {},
+  workBaseline = "",
+  reuseAssignments = false;
 async function scan(incremental = false, learning = false) {
   clearLearning();
   await cancelAI();
@@ -279,6 +284,10 @@ async function scan(incremental = false, learning = false) {
   try {
     snapshot = await send({
       type: "RF_SCAN",
+      workProfile: await ResumeMatcher.workProfile(resume),
+      ...(reuseAssignments
+        ? { workAssignments, workTopology: snapshot?.workTopology }
+        : {}),
       adapters: data.adapters || { version: 1, adapters: [] },
       counts: Object.fromEntries(
         ["education", "work", "projects"].map((key) => [
@@ -291,6 +300,8 @@ async function scan(incremental = false, learning = false) {
     clearPage();
     throw e;
   }
+  reuseAssignments = false;
+  renderWorkBindings();
   agentNeedsRescan = false;
   void ResumeMetrics.record({ scans: 1 });
   $("scopeStatus").textContent = snapshot.selectedScope
@@ -1277,7 +1288,11 @@ async function requestFieldAI(automatic = false) {
     if (activeTab?.id !== tabId || activeTab?.url !== snapshot.url)
       throw Error("当前页面已切换，AI 建议已丢弃，请重新扫描");
     aiSuggestions = response.accepted;
-    lastAIContext = aiCalibrationBase(aiSettings, response.gateway, response.model);
+    lastAIContext = aiCalibrationBase(
+      aiSettings,
+      response.gateway,
+      response.model,
+    );
     void ResumeAICalibration.record(
       response.accepted
         .map((m) => ({
@@ -1656,3 +1671,53 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         " 项，完成后独立回读核对；可取消。",
     );
 });
+
+function renderWorkBindings() {
+  let host = document.getElementById("workBindings");
+  if (!host) {
+    host = document.createElement("section");
+    host.id = "workBindings";
+    document.getElementById("fields").before(host);
+  }
+  host.replaceChildren();
+  if (!snapshot?.workBindings?.length) return;
+  const title = document.createElement("h2");
+  title.textContent = "分配工作 / 实习记录";
+  host.append(title);
+  for (const b of snapshot.workBindings) {
+    const label = document.createElement("label");
+    label.textContent =
+      b.context + " · 第 " + (b.moduleRecordIndex + 1) + " 条";
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", label.textContent + " 对应经历");
+    select.append(new Option("请选择独立记录", ""));
+    (resume.work || []).forEach((r, i) => {
+      if (
+        !r.employmentType ||
+        r.employmentType === "unknown" ||
+        r.employmentType === b.employmentType
+      )
+        select.append(
+          new Option(
+            "第 " + (i + 1) + " 条 · " + (r.company || "未命名"),
+            String(i),
+          ),
+        );
+    });
+    select.value = b.recordIndex === null ? "" : String(b.recordIndex);
+    select.onchange = () =>
+      run(async () => {
+        workAssignments = Object.fromEntries(
+          snapshot.workBindings
+            .filter((x) => x.recordIndex !== null)
+            .map((x) => [x.id, x.recordIndex]),
+        );
+        if (select.value === "") delete workAssignments[b.id];
+        else workAssignments[b.id] = Number(select.value);
+        reuseAssignments = true;
+        await scan();
+      });
+    label.append(select);
+    host.append(label);
+  }
+}

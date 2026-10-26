@@ -5,7 +5,7 @@
   function key(a){return JSON.stringify([norm(a.label),a.section,a.recordIndex,norm(a.context),a.type,a.origin,a.page,a.formId||null]);}
   function match(field,resume,page){
     if(root.ResumeMatcher?.isFamilyField(field))return null;
-    if(protectedField(field)||field.ambiguousLabel)return null;
+    if(protectedField(field)||field.ambiguousLabel||field.workBindingRequired)return null;
     const wanted=key(identity(field,page)),found=[];
     for(const [i,a] of (Array.isArray(resume.fieldAnswers)?resume.fieldAnswers:[]).entries())if(a&&key(a)===wanted&&typeof a.value==='string'&&a.value.trim())found.push({path:`fieldAnswers.${i}.value`});
     return found.length===1?found[0]:null;
@@ -16,6 +16,7 @@
     out.fieldAnswers||=[];const seen=new Map();
     for(const {field,value,path} of drafts){
       if(root.ResumeMatcher?.isFamilyField(field)&&(!path||path!==root.ResumeMatcher.familyPath(field)))throw Error('家庭成员关系或资料路径未确定');
+      if(field.workBindingRequired)throw Error("请先分配独立经历记录");
       if(protectedField(field))throw Error('不保存密码或验证码');
       if(field.ambiguousLabel)throw Error('同组存在同名字段，无法确定答案归属，请先补充站点规则');
       if(typeof value!=='string'||!value.trim())continue;

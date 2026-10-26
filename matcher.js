@@ -11,6 +11,17 @@
     if(field.datePart)return `family.${role}.birthdayParts.${field.datePart}`;
     const hits=Object.entries(familyFields).filter(([,names])=>names.some(n=>labelVariants(label).includes(normalize(n))));return hits.length===1?`family.${role}.${hits[0][0]}`:null;
   }
+  async function workProfile(resume){const bytes=new TextEncoder().encode(JSON.stringify(resume));const key=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');return {key,records:(resume.work||[]).map((r,index)=>({index,type:['employment','internship'].includes(r?.employmentType)?r.employmentType:'unknown'}))};}
+  function bindWork(fields,profile,assignments={}){
+    const groups=new Map();for(const f of fields.filter(f=>f.workModuleId)){const id=f.workModuleId+':'+f.moduleRecordIndex;if(!groups.has(id))groups.set(id,[]);groups.get(id).push(f);}
+    const modules=new Set([...groups.values()].map(g=>g[0].workModuleId)),claimed=new Map(),result=[];
+    for(const [id,group]of groups){const f=group[0],records=profile?.records,explicit=Object.hasOwn(assignments,id),eligible=records?.filter(r=>r.type===f.employmentType),index=explicit?assignments[id]:records?eligible[f.moduleRecordIndex]?.index:modules.size===1?f.moduleRecordIndex:null;
+      const record=records?.find(r=>r.index===index),valid=Number.isInteger(index)&&(!records||record&&(record.type==='unknown'&&explicit||record.type===f.employmentType));
+      const item={id,context:f.context,employmentType:f.employmentType,moduleRecordIndex:f.moduleRecordIndex,recordIndex:valid?index:null,fields:group};result.push(item);if(valid){if(!claimed.has(index))claimed.set(index,[]);claimed.get(index).push(item);}
+    }
+    for(const item of result){if(item.recordIndex!==null&&claimed.get(item.recordIndex).length>1)item.recordIndex=null;for(const f of item.fields){f.workBindingRequired=item.recordIndex===null;f.recordIndex=item.recordIndex;if(f.workBindingRequired){f.contextBlocked=true;f.matchWarning='请分配独立的工作/实习记录';}if(f.datePath)f.datePath=item.recordIndex===null?null:f.datePath.replace(/^work\.\d+\./,'work.'+item.recordIndex+'.');}}
+    return result.map(({fields,...item})=>item);
+  }
   const enums={
     gender:[['男','男性','male','man'],['女','女性','female','woman'],['其他'],['不愿透露','保密']],
     politicalStatus:[['中共党员','中国共产党党员','共产党员','党员'],['中共预备党员','中国共产党预备党员','预备党员'],['共青团员','中国共产主义青年团团员','团员'],['民革党员','中国国民党革命委员会党员'],['民盟盟员','中国民主同盟盟员'],['民建会员','中国民主建国会会员'],['民进会员','中国民主促进会会员'],['农工党党员','中国农工民主党党员'],['致公党党员','中国致公党党员'],['九三学社社员'],['台盟盟员','台湾民主自治同盟盟员'],['无党派人士'],['群众','普通群众']],
@@ -80,7 +91,7 @@
   function flatten(data, prefix='', out={}) {
     const member=prefix.match(/^family\.([^.]+)$/)?.[1];if(member&&familyRoles[member]&&!data?.relationship)out[prefix+'.relationship']=familyRoles[member][0];
     for (const [key,value] of Object.entries(data || {})) {
-      if(!prefix&&key==='_normalization')continue;
+      if(!prefix&&key==='_normalization'||/^work\.\d+$/.test(prefix)&&key==='employmentType')continue;
       if(!prefix&&key==='fieldAnswers'){
         if(Array.isArray(value))value.forEach((a,i)=>{if(typeof a?.value==='string')out[`fieldAnswers.${i}.value`]=a.value;});
         continue;
@@ -193,6 +204,7 @@
     return {handled:true,hits,reason:hits.length>1?'数值区间边界重叠，请人工选择':hits.length?'唯一同单位区间':'没有同单位的明确区间，请人工选择'};
   }
   function allowedPath(field,path){
+    if(field.workBindingRequired)return false;
     if(isFamilyField(field)){const memberPath=familyPath(field);return !!memberPath&&path===memberPath;}
     if(path.startsWith('family.'))return false;
     if(field.contextBlocked||protectedLabel(field)||foreignPerson(field)&&path.startsWith('basics.')&&path!==infer(field)?.path)return false;
@@ -216,6 +228,7 @@
   }
   function resolveField(field,values){
     if(isFamilyField(field)&&!familyPath(field))return null;
+    if(field.workBindingRequired)return null;
     if(field.recordPolicy==='uniqueRecord'){
       let indices=[...new Set(Object.keys(values).filter(p=>p.startsWith(field.section+'.')).map(p=>p.split('.')[1]).filter(i=>/^\d+$/.test(i)))];
       if(field.section==='languages'){
@@ -246,6 +259,6 @@
     const skill=path.match(/^(skills\.\d+)\.name$/),category=skill&&values[skill[1]+'.category'];
     return {sourceValue:value,kind:/^basics\.(?:city|hukouAddress|nativePlace|expectedCity)$/.test(path)?'region':'exact',parts:category?[String(category),value]:value.split(/\s*[>＞→]\s*/).filter(Boolean)};
   }
-  root.ResumeMatcher={familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,optionContains,numericInterval,numericOptions,allowedPath,candidatePaths};
+  root.ResumeMatcher={workProfile,bindWork,familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,optionContains,numericInterval,numericOptions,allowedPath,candidatePaths};
   if (typeof module!=='undefined') module.exports=root.ResumeMatcher;
 })(globalThis);

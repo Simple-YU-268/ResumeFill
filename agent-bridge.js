@@ -8,7 +8,7 @@
  async function send(run,message){await checkPage(run);const r=await ResumePageBridge.send(run.tabId,message);if(r?.error)throw Error(r.error);return r;}
  async function observe(run){
   const {resume,adapters}=await chrome.storage.local.get(['resume','adapters']);if(!resume)throw Error('没有简历');
-  const snap=await send(run,{type:'RF_SCAN',adapters:adapters||{version:1,adapters:[]},counts:Object.fromEntries(['education','work','projects'].map(k=>[k,resume[k]?.length||0]))});
+  const snap=await send(run,{type:'RF_SCAN',adapters:adapters||{version:1,adapters:[]},workProfile:await ResumeMatcher.workProfile(resume),counts:Object.fromEntries(['education','work','projects'].map(k=>[k,resume[k]?.length||0]))});
   if(snap.url!==run.url||pageKey(snap.url)!==run.pageKey)throw Error('页面范围变化');run.snapshot=snap;
   const values=ResumeMatcher.flatten(resume);const bindings=[];for(const f of snap.fields){const b=run.approved.get(f.stableId);if(b&&b.signature===signature(f)&&values[b.path]===run.values[b.path])bindings.push({id:f.id,path:b.path});}
   return {pageKey:run.pageKey,fields:snap.fields.map(f=>{const effective=ResumeMatcher.resolveField(f,values)||f;return {id:f.id,stableId:f.stableId,label:f.label,section:effective.section,recordIndex:effective.recordIndex,type:f.type,required:f.required,ambiguousLabel:f.ambiguousLabel,contextBlocked:f.contextBlocked,familyRole:effective.familyRole,familyAmbiguous:effective.familyAmbiguous,candidatePaths:ResumeMatcher.candidatePaths(effective,values)};}),candidatePaths:Object.keys(values).filter(p=>values[p]),bindings};

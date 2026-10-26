@@ -14,6 +14,11 @@
     scannedUrl = "",
     operationController = null,
     pendingOperation = null;
+  const workModules = new WeakMap();
+  let nextWorkModule = 0,
+    workProfile = null,
+    workAssignments = {},
+    workTopology = "";
   let selectedScope = null,
     scopeChoices = new Map(),
     scopeChoiceUrl = "",
@@ -630,8 +635,19 @@
             : /^获奖经历/.test(title)
               ? "awards"
               : null;
+    if (section === "work" && !workModules.has(block))
+      workModules.set(block, "work-module-" + ++nextWorkModule);
     return section
       ? {
+          ...(section === "work"
+            ? {
+                workModuleId: workModules.get(block),
+                moduleRecordIndex: index,
+                employmentType: /^实习/.test(title)
+                  ? "internship"
+                  : "employment",
+              }
+            : {}),
           section,
           recordIndex: section === "basics" ? null : index >= 0 ? index : null,
           context: title,
@@ -723,7 +739,11 @@
       radios: radios?.length ? radios : [el],
     };
   }
-  function scan(data, counts = {}) {
+  function scan(data, counts = {}, binding = {}) {
+    if (binding.profile) {
+      if (binding.profile.key !== workProfile?.key) workAssignments = {};
+      workProfile = binding.profile;
+    }
     if (data) {
       A.validate(data);
       activeAdapter = A.choose(data, location.href);
@@ -1084,6 +1104,25 @@
           missing: Math.max(0, (counts[s.key] || 0) - present),
         };
       });
+    const topology = JSON.stringify(
+      fields.map((f) => [
+        f.stableId,
+        f.label,
+        f.workModuleId,
+        f.moduleRecordIndex,
+      ]),
+    );
+    if (topology !== workTopology) {
+      workAssignments = {};
+      workTopology = topology;
+    }
+    if (binding.assignments && binding.topology === topology)
+      workAssignments = { ...binding.assignments };
+    const workBindings = ResumeMatcher.bindWork(
+      fields,
+      workProfile,
+      workAssignments,
+    );
     const groups = new Map();
     for (const field of fields) {
       const key = JSON.stringify([
@@ -1107,6 +1146,9 @@
         }
     return {
       fields,
+      workBindings,
+      workTopology,
+      workProfileKey: workProfile?.key,
       sectionIssues,
       coverage,
       selectedScope: selectedScope
@@ -1213,7 +1255,9 @@
         continue;
       }
       if (
-        (selectedScope || ResumeMatcher.isFamilyField(d.field)) &&
+        (selectedScope ||
+          d.field.workModuleId ||
+          ResumeMatcher.isFamilyField(d.field)) &&
         (!item.path || !ResumeMatcher.allowedPath(d.field, item.path))
       ) {
         results.push({
@@ -1376,6 +1420,9 @@
         label: resolved,
         tokens: [resolved],
         ...contextFor(el, adapterScope),
+        ...(mokaContextFor(el)?.section === "work"
+          ? { workBindingRequired: true, contextBlocked: true }
+          : {}),
         regionRole: structure.regionRole,
         regionLevel: structure.regionLevel,
         datePart: structure.datePart,
@@ -1392,6 +1439,8 @@
         const d = descriptor(el, document);
         d.scanUrl = location.href;
         d.field = this.describe(el);
+        if (d.field.workBindingRequired)
+          throw Error("请在插件中分配工作/实习记录后重扫");
         d.referenceData = referenceData;
         if (ResumeMatcher.isFamilyField(d.field)) {
           if (!ResumeMatcher.familyPath(d.field))
@@ -1485,7 +1534,11 @@
         return { approved: message.items.length };
       }
       if (message.type === "RF_SCAN")
-        return scan(message.adapters, message.counts);
+        return scan(message.adapters, message.counts, {
+          profile: message.workProfile,
+          assignments: message.workAssignments,
+          topology: message.workTopology,
+        });
       if (message.type === "RF_LEARN_READ") {
         if (location.href !== scannedUrl)
           throw Error("页面已变化，请重新扫描并学习");
