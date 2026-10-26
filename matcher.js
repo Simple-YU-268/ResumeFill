@@ -11,7 +11,7 @@
     if(field.datePart)return `family.${role}.birthdayParts.${field.datePart}`;
     const hits=Object.entries(familyFields).filter(([,names])=>names.some(n=>labelVariants(label).includes(normalize(n))));return hits.length===1?`family.${role}.${hits[0][0]}`:null;
   }
-  async function workProfile(resume){const bytes=new TextEncoder().encode(JSON.stringify(resume));const key=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');return {key,records:(resume.work||[]).map((r,index)=>({index,type:['employment','internship'].includes(r?.employmentType)?r.employmentType:'unknown'}))};}
+  async function workProfile(resume){const bytes=new TextEncoder().encode(JSON.stringify(resume,(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(k=>[k,value[k]])):value));const key=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');return {key,records:(resume.work||[]).map((r,index)=>({index,type:['employment','internship'].includes(r?.employmentType)?r.employmentType:'unknown'}))};}
   function bindWork(fields,profile,assignments={}){
     const groups=new Map();for(const f of fields.filter(f=>f.workModuleId)){const id=f.workModuleId+':'+f.moduleRecordIndex;if(!groups.has(id))groups.set(id,[]);groups.get(id).push(f);}
     const modules=new Set([...groups.values()].map(g=>g[0].workModuleId)),claimed=new Map(),result=[];

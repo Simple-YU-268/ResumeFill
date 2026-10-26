@@ -137,6 +137,19 @@ async function send(message) {
       throw e;
     }
   }
+  if (
+    ["RF_FILL", "RF_PREPARE"].includes(message.type) &&
+    snapshot?.workProfileKey
+  ) {
+    const current = (await chrome.storage.local.get("resume")).resume;
+    if (
+      !current ||
+      (await ResumeMatcher.workProfile(current)).key !== snapshot.workProfileKey
+    ) {
+      clearPage();
+      throw Error("资料已变化，请重新扫描并分配经历");
+    }
+  }
   if (message.type === "RF_FILL") {
     message = { ...message, progressId: crypto.randomUUID() };
     fillProgressId = message.progressId;
@@ -217,7 +230,10 @@ async function scan(incremental = false, learning = false) {
     clearPage();
     throw e;
   }
-  if(tabId!==tab.id||snapshot?.url!==tab.url){selectedDocumentId=null;workAssignments={};}
+  if (tabId !== tab.id || snapshot?.url !== tab.url) {
+    selectedDocumentId = null;
+    workAssignments = {};
+  }
   const oldRows = incremental
     ? new Map(
         rows.map((r) => [
@@ -371,7 +387,9 @@ async function scan(incremental = false, learning = false) {
     select.append(blank);
     for (const path of Object.keys(values).filter(
       (p) =>
-        (!snapshot.selectedScope && !ResumeMatcher.isFamilyField(field)) ||
+        (!snapshot.selectedScope &&
+          !field.workModuleId &&
+          !ResumeMatcher.isFamilyField(field)) ||
         ResumeMatcher.allowedPath(field, p),
     )) {
       const option = document.createElement("option");

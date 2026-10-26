@@ -56,7 +56,7 @@ const version = require('./package.json').version;
         if (scenario==='multiple'){assert.equal(snapshot.selectionRequired,true);assert.equal(snapshot.fields.length,0);const choice=snapshot.documents.find(d=>d.frameId===1);snapshot=await sandbox.ResumePageBridge.scan(1,{type:'RF_SCAN',documentId:choice.documentId,adapters:{version:1,adapters:[]}});assert.equal(snapshot.fields.length,1);}
         else {
           assert.equal(error,undefined);
-          const expected = scenario==='moka-dual'?2:['same','nested','srcdoc','editable','moka-unknown'].includes(scenario)?1:0;
+          const expected = scenario==='moka-dual'?2:['same','nested','srcdoc','shadow','editable','moka-unknown'].includes(scenario)?1:0;
           assert.equal(snapshot.fields.length,expected,scenario);
           if (scenario==='editable') assert.equal(snapshot.fields[0].type,'contenteditable');
         }

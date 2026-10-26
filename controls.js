@@ -59,6 +59,12 @@
   }
   function guard(d) {
     refreshLayui(d);
+    if (
+      d.root &&
+      (d.el.getRootNode() !== d.root ||
+        (d.root.host && !d.root.host.isConnected))
+    )
+      throw Error("控件根已变化，请重新扫描");
     if (d.scopeGuard && !d.scopeGuard())
       throw Error("所选区块已变化，请重新选择");
     if (d.ocrGuard && !d.ocrGuard())
@@ -92,7 +98,7 @@
     if (id) {
       const nodes = id
         .split(/\s+/)
-        .map((id) => d.el.ownerDocument.getElementById(id))
+        .map((id) => (d.root || d.el.getRootNode()).getElementById(id))
         .filter(visible);
       if (nodes.length !== 1) return null;
       return nodes[0];
@@ -108,7 +114,7 @@
       if (choices.length > 1) throw Error("Layui 下拉列表不唯一");
       return choices[0] || null;
     }
-    const choices = menus(d.el.ownerDocument);
+    const choices = menus(d.root || d.el.getRootNode());
     if (visible(d.menu) && choices.includes(d.menu)) return d.menu;
     const fresh = choices.filter((n) => !d.beforeMenus?.has(n));
     if (fresh.length === 1) return fresh[0];
@@ -161,7 +167,7 @@
       }
     };
     const observer = new MutationObserver(observe);
-    observer.observe(d.el.ownerDocument.body, {
+    observer.observe(d.root?.host ? d.root : d.el.ownerDocument.body, {
       subtree: true,
       attributes: true,
       childList: true,
@@ -614,7 +620,7 @@
     let panels;
     if (ids.length) {
       panels = ids
-        .map((id) => d.el.ownerDocument.getElementById(id))
+        .map((id) => (d.root || d.el.getRootNode()).getElementById(id))
         .filter(visible);
       if (panels.length !== 1 || !panels[0].matches(".jbs_select_panel"))
         throw Error("多级选择器 ARIA 引用未唯一命中");
@@ -951,7 +957,7 @@
       d.el.click();
       const panel = await waitFor(() => {
         guard(d);
-        const all = list(d.el.ownerDocument, cfg.panelSelector);
+        const all = list(d.root || d.el.getRootNode(), cfg.panelSelector);
         if (all.length > 1) throw Error("日期面板不唯一");
         return all[0];
       });
@@ -1048,7 +1054,7 @@
     } else if (d.type === "combobox") {
       d.optionConfirmed = false;
       d.numericSelection = null;
-      d.beforeMenus = new Set(menus(d.el.ownerDocument));
+      d.beforeMenus = new Set(menus(d.root || d.el.getRootNode()));
       const stopWatching = watchMenus(d);
       try {
         const alreadyOpen =
@@ -1142,7 +1148,7 @@
         const option = await waitFor(() => {
           guard(d);
           const matches = list(
-            d.el.ownerDocument,
+            d.root || d.el.getRootNode(),
             d.config.levels[i].optionsSelector,
           ).filter((o) => enabled(o) && norm(o.textContent) === norm(parts[i]));
           if (matches.length > 1) throw Error("级联选项不唯一");

@@ -164,6 +164,13 @@
         })),
     };
   }
+  const rootIds = new WeakMap();
+  let rootCounter = 0;
+  function rootId(el) {
+    const root = el.getRootNode();
+    if (!rootIds.has(root)) rootIds.set(root, "root-" + ++rootCounter);
+    return rootIds.get(root);
+  }
   const stableIds = new WeakMap(),
     lastDescriptors = new WeakMap();
   let nextStableId = 0;
@@ -184,7 +191,7 @@
       "checkbox",
     ].includes(el.type);
   const query = (scope, selector) =>
-    selector ? Array.from(scope.querySelectorAll(selector)) : [];
+    selector ? ResumeLayout.query(scope, selector) : [];
   const shown = (scope, selector) =>
     query(scope, selector).filter(ResumeLayout.visible);
   const text = (el) => {
@@ -713,6 +720,8 @@
     return "";
   }
   function descriptor(el, scope, config = {}) {
+    const root = el.getRootNode();
+    if (root.host) scope = root;
     if (el.matches('[class*="sd-Select-container-"]'))
       config = { ...config, type: "combobox", mokaSelect: true };
     if (el.closest(".jbs_three_layers_input_wrapper"))
@@ -724,12 +733,17 @@
         type === "radio"
           ? el.type === "radio"
             ? query(scope, 'input[type="radio"]').filter(
-                (r) => r.name === el.name && r.name && eligible(r),
+                (r) =>
+                  r.getRootNode() === root &&
+                  r.name === el.name &&
+                  r.name &&
+                  eligible(r),
               )
             : shown(el, 'input[type="radio"]')
           : null;
     return {
       el,
+      root,
       scope,
       type,
       config,
@@ -754,7 +768,8 @@
     const fields = [],
       sectionIssues = [];
     const visibleText = ResumeLayout.collect(document).filter(
-      (n) => !selectedScope || selectedScope.root.contains(n.parent),
+      (n) =>
+        !selectedScope || ResumeLayout.contains(selectedScope.root, n.parent),
     );
     for (const s of scopes(activeAdapter)) {
       if (s.error) {
@@ -778,8 +793,8 @@
           d.scopeGuard = () =>
             selectedScope?.root.isConnected &&
             selectedScope.url === location.href &&
-            selectedScope.root.contains(el) &&
-            s.scope.contains(el);
+            ResumeLayout.contains(selectedScope.root, el) &&
+            ResumeLayout.contains(s.scope, el);
         if (d.type === "radio" && d.radios.some((r) => used.has(r))) return;
         used.add(el);
         if (d.type === "radio") d.radios.forEach((r) => used.add(r));
@@ -790,7 +805,7 @@
           used.add(child);
         const linked = (el.getAttribute("aria-labelledby") || "")
           .split(/\s+/)
-          .map((id) => text(document.getElementById(id)))
+          .map((id) => text(el.getRootNode().getElementById(id)))
           .join(" ");
         const labels = Array.from(el.labels || [])
           .filter(ResumeLayout.visible)
@@ -852,6 +867,7 @@
           : null;
         const field = {
           id,
+          rootId: rootId(el),
           label,
           tokens: tokens.length
             ? tokens
@@ -1110,6 +1126,10 @@
         f.label,
         f.workModuleId,
         f.moduleRecordIndex,
+        f.employmentType,
+        f.context,
+        f.rootId,
+        f.type,
       ]),
     );
     if (topology !== workTopology) {
@@ -1134,6 +1154,7 @@
         field.datePath,
         field.datePart,
         field.familyRole,
+        field.rootId,
       ]);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(field);
@@ -1146,6 +1167,29 @@
         }
     return {
       fields,
+      diagnostics: [
+        ...(fields.some((f) => {
+          const d = registry.get(f.id);
+          return (
+            d.el.readOnly &&
+            !d.config.datePanel &&
+            !d.config.referencePicker &&
+            !d.config.mokaSelect &&
+            !d.config.layuiSelect
+          );
+        })
+          ? [{ code: "READONLY_CONTROL" }]
+          : []),
+        ...(ResumeLayout.query(document, "*").some(
+          (n) =>
+            n.tagName.includes("-") &&
+            !n.shadowRoot &&
+            !n.querySelector("input,textarea,select") &&
+            !n.matches("[data-resumefill-assistant]"),
+        )
+          ? [{ code: "UNKNOWN_CUSTOM_CONTROL" }]
+          : []),
+      ],
       workBindings,
       workTopology,
       workProfileKey: workProfile?.key,
@@ -1370,6 +1414,7 @@
   }
   globalThis.ResumeFillPage = {
     isBusy: () => busy,
+    workProfileKey: () => workProfile?.key,
     describe(el) {
       el = el.closest('[class*="sd-Select-container-"]') || el;
       if (selectedScope)
@@ -1414,7 +1459,7 @@
           el.name ||
           "未命名字段";
       const adapterScope = scopes(activeAdapter).find(
-        (s) => !s.error && s.scope?.contains(el),
+        (s) => !s.error && s.scope && ResumeLayout.contains(s.scope, el),
       ) || { config: {} };
       return {
         label: resolved,

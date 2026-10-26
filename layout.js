@@ -1,7 +1,11 @@
 (function(root){
+  function roots(scope){const out=[scope];for(const el of scope.querySelectorAll('*'))if(el.shadowRoot&&!el.matches('[data-resumefill-assistant]'))out.push(...roots(el.shadowRoot));return out;}
+  function query(scope,selector){return roots(scope).flatMap(r=>Array.from(r.querySelectorAll(selector)));}
+  function contains(scope,el){for(let n=el;n;n=n.getRootNode()?.host)if(scope===n||scope.contains(n))return true;return false;}
+  function activeElement(doc=document){let el=doc.activeElement;while(el?.shadowRoot?.activeElement)el=el.shadowRoot.activeElement;return el;}
   function visible(el){
     if(!el.getClientRects().length || el.closest?.('[hidden],[inert],[aria-hidden="true"]')) return false;
-    for(let node=el;node;node=node.parentElement){const s=getComputedStyle(node);if(s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse'||Number(s.opacity)===0)return false;}return true;
+    for(let node=el;node;node=node.parentElement||node.getRootNode()?.host){const s=getComputedStyle(node);if(node.matches?.('[hidden],[inert],[aria-hidden="true"]')||s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse'||Number(s.opacity)===0)return false;}return true;
   }
   function distance(f,l){
     const overlap=Math.min(f.bottom,l.bottom)-Math.max(f.top,l.top),left=f.left-l.right,above=f.top-l.bottom;
@@ -10,7 +14,7 @@
     return Infinity;
   }
   function collect(doc){
-    const nodes=[],walker=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT);let node;
+    const nodes=[];for(const tree of roots(doc)){const walker=doc.createTreeWalker(tree===doc?doc.body:tree,NodeFilter.SHOW_TEXT);let node;
     while((node=walker.nextNode())){
       const parent=node.parentElement;
       if(!parent||parent.closest('script,style,noscript,option,textarea,button,[role="option"],.help,.hint,.description,.explanation,[role="note"]')||!visible(parent))continue;
@@ -18,9 +22,10 @@
       if(!text||text.length>60)continue;
       const range=doc.createRange();range.selectNodeContents(node);const rect=range.getBoundingClientRect();
       if(rect.width&&rect.height)nodes.push({text,rect,parent});
-    }return nodes;
+    }}return nodes;
   }
   function infer(el,nodes,controls){
+    nodes=nodes.filter(n=>n.parent.getRootNode()===el.getRootNode());controls=controls.filter(n=>n.getRootNode()===el.getRootNode());
     const box=el.getBoundingClientRect();
     const cell=el.closest('td,th'),definition=el.closest('dd');
     const candidates=nodes.filter(n=>!el.contains(n.parent)&&(!cell||!n.parent.closest('td,th')||n.parent.closest('td,th')===cell)&&(!definition||!n.parent.closest('dt')||definition.previousElementSibling===n.parent.closest('dt'))).map(n=>({...n,score:distance(box,n.rect)})).filter(n=>Number.isFinite(n.score)&&!controls.some(other=>other!==el&&distance(other.getBoundingClientRect(),n.rect)<n.score)).sort((a,b)=>a.score-b.score);
@@ -51,6 +56,6 @@
     const datePart=el.matches('select')&&/出生|生日/.test(groupText)?(/year|nian/i.test(technical)||el.getAttribute('data-date-part')==='year'||/年份|^年$/.test(dateHint)?'year':/month|yue/i.test(technical)||el.getAttribute('data-date-part')==='month'||/月份|^月$/.test(dateHint)?'month':/day|ri_/i.test(technical)||el.getAttribute('data-date-part')==='day'||/日期|^日$/.test(dateHint)?'day':null):null;
     return {label:label||'',groupLabel,context:tableLabel||'',regionRole,regionLevel:regionRole?level:null,datePart,datePath:datePart?'basics.birthday':null,evidence:groupLabel?'单选组可见标签':tableLabel?'表格同行标签':definitionLabel?'定义列表标签':'表单容器标签'};
   }
-  root.ResumeLayout={visible,distance,collect,infer,associate};
+  root.ResumeLayout={roots,query,contains,activeElement,visible,distance,collect,infer,associate};
   if(typeof module!=='undefined')module.exports=root.ResumeLayout;
 })(globalThis);
