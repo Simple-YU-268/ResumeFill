@@ -53,7 +53,7 @@ const version = require('./package.json').version;
         let snapshot, error;
         try { snapshot=await sandbox.ResumePageBridge.scan(1,{type:'RF_SCAN',adapters:{version:1,adapters:[]}}); }
         catch(e){error=e.message;}
-        if (scenario==='multiple') assert.match(error,/多个独立表单/);
+        if (scenario==='multiple'){assert.equal(snapshot.selectionRequired,true);assert.equal(snapshot.fields.length,0);const choice=snapshot.documents.find(d=>d.frameId===1);snapshot=await sandbox.ResumePageBridge.scan(1,{type:'RF_SCAN',documentId:choice.documentId,adapters:{version:1,adapters:[]}});assert.equal(snapshot.fields.length,1);}
         else {
           assert.equal(error,undefined);
           const expected = scenario==='moka-dual'?2:['same','nested','editable','moka-unknown'].includes(scenario)?1:0;
@@ -66,8 +66,8 @@ const version = require('./package.json').version;
         }
         if(scenario==='moka-dual') {
           const paths=await page.evaluate(fields=>fields.map(f=>ResumeMatcher.match(f,{'work.0.company':'Synthetic Employer'})?.path),snapshot.fields);
-          assert.deepEqual(paths,['work.0.company','work.0.company']);
-          results.push({scenario,result:'KNOWN_GAP_REPRODUCED',outcome:'work-and-internship-share-record-zero'});
+          assert.deepEqual(paths,[undefined,undefined]);
+          results.push({scenario,result:'PASS',outcome:'work-and-internship-require-distinct-bindings'});
           continue;
         }
         if(scenario==='moka-unknown') assert.equal(snapshot.fields[0].contextBlocked,true);

@@ -202,6 +202,7 @@ function requireFormTab(tab) {
     throw Error("当前标签页已失效，请重新打开插件");
   return tab;
 }
+let selectedDocumentId = null;
 let workAssignments = {},
   workBaseline = "",
   reuseAssignments = false;
@@ -216,6 +217,7 @@ async function scan(incremental = false, learning = false) {
     clearPage();
     throw e;
   }
+  if(tabId!==tab.id||snapshot?.url!==tab.url){selectedDocumentId=null;workAssignments={};}
   const oldRows = incremental
     ? new Map(
         rows.map((r) => [
@@ -284,6 +286,7 @@ async function scan(incremental = false, learning = false) {
   try {
     snapshot = await send({
       type: "RF_SCAN",
+      documentId: selectedDocumentId,
       workProfile: await ResumeMatcher.workProfile(resume),
       ...(reuseAssignments
         ? { workAssignments, workTopology: snapshot?.workTopology }
@@ -301,6 +304,7 @@ async function scan(incremental = false, learning = false) {
     throw e;
   }
   reuseAssignments = false;
+  renderDocuments();
   renderWorkBindings();
   agentNeedsRescan = false;
   void ResumeMetrics.record({ scans: 1 });
@@ -1719,5 +1723,66 @@ function renderWorkBindings() {
       });
     label.append(select);
     host.append(label);
+  }
+}
+
+function renderDocuments() {
+  let host = document.getElementById("documentDiagnostics");
+  if (!host) {
+    host = document.createElement("section");
+    host.id = "documentDiagnostics";
+    document.getElementById("fields").before(host);
+  }
+  host.replaceChildren();
+  const docs = snapshot?.documents || [];
+  if (docs.length > 1 || snapshot?.selectionRequired) {
+    const label = document.createElement("label");
+    label.textContent = "选择表单文档";
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "选择表单文档");
+    select.append(new Option("请选择目标表单", ""));
+    for (const d of docs)
+      if (d.status === "available")
+        select.append(
+          new Option(d.url + " · " + d.fieldCount + " 个字段", d.documentId),
+        );
+    select.value = snapshot.frameDocumentId || "";
+    select.onchange = () =>
+      run(async () => {
+        selectedDocumentId = select.value || null;
+        workAssignments = {};
+        await scan();
+      });
+    label.append(select);
+    host.append(label);
+  }
+  const names = {
+    NO_FIELDS: "没有发现可填写字段",
+    CROSS_ORIGIN_DOCUMENT: "跨域 iframe：本版不填写，请单独打开目标页面",
+    CROSS_ORIGIN_OR_OPAQUE: "跨域或不透明文档：无法确认归属",
+    OPAQUE_SANDBOX: "sandbox 不透明来源：不执行填写",
+    HIDDEN_DOCUMENT: "隐藏文档已排除",
+    RUNTIME_STALE: "页面脚本版本过旧：保存网页内容后刷新",
+    RUNTIME_NOT_READY: "页面脚本尚未就绪或没有访问权限",
+    UNSUPPORTED_DOCUMENT_URL: "当前嵌入文档类型尚不支持",
+    DOCUMENT_ID_UNAVAILABLE: "无法确认文档身份",
+    MULTIPLE_DOCUMENTS: "发现多个表单，请先选择目标文档",
+    READONLY_CONTROL: "部分只读控件需要专用适配",
+    UNKNOWN_CUSTOM_CONTROL: "发现尚未识别的自定义控件",
+  };
+  const codes = [...new Set((snapshot?.diagnostics || []).map((d) => d.code))];
+  if (codes.length) {
+    const details = document.createElement("details");
+    details.open = !snapshot.fields.length;
+    const title = document.createElement("summary");
+    title.textContent = "扫描诊断 · " + codes.length + " 类";
+    details.append(title);
+    for (const code of codes) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.textContent = names[code] || "部分控件尚不支持自动填写";
+      details.append(p);
+    }
+    host.append(details);
   }
 }
