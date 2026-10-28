@@ -1,7 +1,7 @@
 {
   "version": "0.27.1",
   "date": "2026-10-28",
-  "distribution": "extension-development-test",
+  "distribution": "desktop-and-extension-development-test",
   "unitGroups": 15,
   "targetedBrowserGroups": 9,
   "fullBrowserSuiteRerun": false,
@@ -35,5 +35,15 @@
     "newRuntimeFillVerification": false
   },
   "liveAI": "not rerun; unnecessary for deterministic control repair",
-  "sha256": "cea754f3153f4794daf4ebb5adeb3b07a8d8e16d57c03365e975e2092837bfde"
+  "sha256": "cea754f3153f4794daf4ebb5adeb3b07a8d8e16d57c03365e975e2092837bfde",
+  "desktop": {
+    "groups": 6,
+    "status": "passed",
+    "runtimeSourceCommit": "3aec26c",
+    "artifactPrivacyItems": 1119,
+    "identityReferenceUsed": true,
+    "installerMetadataDigest": "passed",
+    "actualUpgradePerformed": false,
+    "observedOldInstalledVersion": "0.25.2"
+  }
 }
