@@ -2,7 +2,7 @@
 
 少填一点，多一点可能。ResumeFill 是本地优先的简历填表 Agent，包含 Windows 桌面端和 Chrome / Edge 扩展。
 
-**当前开发测试版：0.27.0** · [下载发行版](https://github.com/Simple-YU-268/ResumeFill/releases/latest) · [项目主页](https://github.com/Simple-YU-268/ResumeFill)
+**当前开发测试版：0.27.1** · [下载发行版](https://github.com/Simple-YU-268/ResumeFill/releases/latest) · [项目主页](https://github.com/Simple-YU-268/ResumeFill)
 
 ## 从这里开始
 

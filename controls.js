@@ -60,6 +60,11 @@
   function guard(d) {
     refreshLayui(d);
     if (
+      (d.config?.elementSelect || d.config?.elementCascader) &&
+      (!enabled(d.el) || d.el.querySelector("input")?.disabled)
+    )
+      throw Error("下拉控件不可用，请重新扫描");
+    if (
       d.root &&
       (d.el.getRootNode() !== d.root ||
         (d.root.host && !d.root.host.isConnected))
@@ -81,7 +86,7 @@
       throw Error("操作已取消或字段/页面已变化");
   }
   const menuSelector =
-    '[role="listbox"],.ant-select-dropdown,.el-select-dropdown,.el-select__popper,.ivu-select-dropdown';
+    '[role="listbox"],.ant-select-dropdown,.el-select-dropdown,.el-select__popper,.el-cascader__dropdown,.ivu-select-dropdown';
   function menus(doc) {
     return list(doc, menuSelector).filter(
       (n) => !n.parentElement?.closest(menuSelector),
@@ -95,11 +100,22 @@
         .querySelector("[aria-controls],[aria-owns]")
         ?.getAttribute("aria-controls") ||
       d.el.querySelector("[aria-owns]")?.getAttribute("aria-owns");
-    if (id) {
-      const nodes = id
-        .split(/\s+/)
+    const described =
+      !id && (d.config?.elementSelect || d.config?.elementCascader)
+        ? [d.el, ...d.el.querySelectorAll("[aria-describedby]")].flatMap((n) =>
+            (n.getAttribute("aria-describedby") || "")
+              .split(/\s+/)
+              .filter(Boolean),
+          )
+        : [];
+    if (id || described.length) {
+      const nodes = (id ? id.split(/\s+/) : [...new Set(described)])
         .map((id) => (d.root || d.el.getRootNode()).getElementById(id))
-        .filter(visible);
+        .filter(
+          (n) =>
+            visible(n) &&
+            (id || n.matches(menuSelector) || n.querySelector(menuSelector)),
+        );
       if (nodes.length !== 1) return null;
       return nodes[0];
     }
@@ -426,7 +442,7 @@
         ? ""
         : d.el.selectedOptions[0]?.textContent?.trim() || "";
     if (d.type === "contenteditable") return d.el.innerText;
-    if (d.type === "combobox") {
+    if (d.type === "combobox" || d.config?.elementCascader) {
       const selected = d.el.querySelector(
         ".ant-select-selection-item,.el-select__selected-item,.el-input__inner",
       );
@@ -444,6 +460,13 @@
     );
   }
   function equal(d, actual, value) {
+    if (d.config?.elementCascader) {
+      const parts = (v) =>
+        String(v)
+          .split(/\s*[>\/／]\s*/)
+          .map((x) => optionKey(x, d));
+      return JSON.stringify(parts(actual)) === JSON.stringify(parts(value));
+    }
     if (
       d.numericSelection &&
       d.numericSelection.value === String(value) &&
@@ -887,7 +910,10 @@
         };
       return { status: "verified" };
     }
-    if (d.type === "combobox" && !d.optionConfirmed)
+    if (
+      (d.type === "combobox" || d.config?.elementCascader) &&
+      !d.optionConfirmed
+    )
       return {
         status: "unconfirmed",
         error: "文本已有内容，但未确认选择真实选项",
@@ -932,6 +958,60 @@
       );
     error.diagnostic = diagnostic;
     throw error;
+  }
+  async function elementCascade(d, value) {
+    const parts = String(value)
+      .split(/\s*[>\/／]\s*/)
+      .filter(Boolean);
+    if (!parts.length || parts.length > 6) throw Error("级联路径无效");
+    d.optionConfirmed = false;
+    d.beforeMenus = new Set(menus(d.root || d.el.getRootNode()));
+    const stop = watchMenus(d);
+    try {
+      if (!associatedMenu(d)) {
+        const trigger = d.el.querySelector("input");
+        if (!trigger) throw Error("级联触发控件不存在");
+        trigger.click();
+      }
+      for (let depth = 0; depth < parts.length; depth++) {
+        let stamp = "",
+          since = 0;
+        const node = await waitFor(() => {
+          guard(d);
+          const menu = associatedMenu(d);
+          if (!menu) return false;
+          const columns = list(menu, ".el-cascader-menu");
+          const column = columns[depth];
+          if (!column) return false;
+          const nodes = list(column, ".el-cascader-node").filter(enabled);
+          const next = JSON.stringify(
+            nodes.map((n) => [n.textContent, n.getAttribute("aria-haspopup")]),
+          );
+          if (next !== stamp) {
+            stamp = next;
+            since = Date.now();
+            return false;
+          }
+          if (Date.now() - since < 120) return false;
+          const found = matchingOptions(nodes, parts[depth], d);
+          if (found.length > 1) throw Error("级联选项不唯一");
+          return found[0];
+        });
+        const leaf =
+          node.getAttribute("aria-haspopup") === "false" ||
+          node.classList.contains("is-leaf");
+        if (leaf !== (depth === parts.length - 1))
+          throw Error("级联层级与完整路径不一致，请人工核对");
+        guard(d);
+        const labels = list(node, ".el-cascader-node__label");
+        if (labels.length !== 1) throw Error("级联操作目标不唯一");
+        labels[0].click();
+      }
+      d.optionConfirmed = true;
+      await settleSelection(d, value);
+    } finally {
+      stop();
+    }
   }
   async function fill(d, value, overwrite) {
     guard(d);
@@ -1055,6 +1135,8 @@
         text: o.textContent,
       };
       await settleSelection(d, value);
+    } else if (d.config?.elementCascader) {
+      await elementCascade(d, value);
     } else if (d.type === "combobox") {
       d.optionConfirmed = false;
       d.numericSelection = null;
@@ -1064,13 +1146,15 @@
         const alreadyOpen =
           (d.config?.layuiSelect ||
             d.config?.mokaSelect ||
+            d.config?.elementSelect ||
             d.el.getAttribute("aria-expanded") === "true" ||
             d.el.querySelector('[aria-expanded="true"]')) &&
           associatedMenu(d);
         if (!alreadyOpen || alreadyOpen.getAttribute("aria-busy") === "true") {
-          const trigger = d.config?.mokaSelect
-            ? d.el.querySelector("input")
-            : d.el;
+          const trigger =
+            d.config?.mokaSelect || d.config?.elementSelect
+              ? d.el.querySelector("input")
+              : d.el;
           if (!trigger) throw Error("下拉触发控件不存在");
           trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
           trigger.click();
@@ -1125,7 +1209,9 @@
         // Moka binds selection on the nested menu, not its layout wrapper.
         const targets = d.config?.mokaSelect
           ? list(matched, '[class*="sd-Menu-container-"]')
-          : [];
+          : d.config?.elementSelect
+            ? list(matched, ":scope > span")
+            : [];
         if (targets.length > 1) throw Error("选项操作目标不唯一");
         const target = targets[0] || matched;
         if (!enabled(target) || target.matches('[class*="sd-Menu-disabled-"]'))

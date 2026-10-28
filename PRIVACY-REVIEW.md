@@ -1,6 +1,6 @@
 # Public release privacy review
 
-Reviewed for v0.27.0 on 2026-10-26. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
+Reviewed for v0.27.1 on 2026-10-28. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
 
 Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.
 
@@ -56,3 +56,8 @@ Webpage OCR screenshots are sent only to the authenticated local desktop endpoin
 - Publication scanning covers two-character Chinese names, family identities, redacted finding paths and vendor archive content; any archive read failure fails the gate. Prepared resource directories are recreated and executable/style references are verified.
 
 This is a code and synthetic-fixture review, not evidence that the current live application page or a real model provider passed end-to-end verification.
+
+
+## 0.27.1 Element controls
+
+Live-page inspection was limited to control markup and opening/closing menus; no applicant values were changed or submitted. Public tests use synthetic profiles and locally constructed Element-compatible markup, not copied personal records or screenshots. Dropdown ownership remains document/root scoped; describedby targets must contain a recognized menu. Cascade paths require an exact hierarchy and verified displayed output.
