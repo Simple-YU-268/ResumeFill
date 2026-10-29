@@ -19,6 +19,17 @@
     const reasons={RF_AGENT_DOCUMENT_CHANGED:'表单文档已变化，请重新选择并扫描',RF_AGENT_PROFILE_CHANGED:'本地资料已变化，请重新核对字段',RF_AGENT_SCOPE_CHANGED:'字段或记录归属变化，请重新核对',RF_AGENT_TIMEOUT:'请求超时或取消，请重试；扩展请求最多等待 25 秒，本机网关模型默认 20 秒',RF_AGENT_PAGE_CHANGED:'页面或字段已变化，请重新扫描后继续',RF_AGENT_CANDIDATES:'候选资料或模型响应未通过校验，请检查资料和模型兼容性',RF_AGENT_CONNECTION:'服务连接或工具调用失败，请检查桌面连接与“保存并测试模型”结果'};
     return {code,message:(labels[tool]||'工具')+'失败：'+reasons[code]};
   }
+  // Chrome match patterns never carry a port, so a local gateway on any port must
+  // be authorised as <scheme>://<host>/*. Every caller shares this one helper.
+  function originPattern(endpoint){try{const url=new URL(String(endpoint||''));return url.protocol+'//'+url.hostname+'/*';}catch{return '';}}
+  // The record context of a field is already resolved by the sender, and the
+  // receiver may only hold a minimized packet (paths, no resume values). The
+  // candidate set cannot be re-derived there: the matcher's label scoring runs
+  // over the whole resume on the sender but only over the packet candidates on
+  // the receiver, so both sides pick different top candidates and a valid
+  // packet is rejected. Validate the scope instead: every declared candidate
+  // must belong to the field's own section and record. This check needs no
+  // resume values, so sender and receiver always agree.
   function settings(data){
     if(!data?.enabled)return {enabled:false};
     let url;try{url=new URL(String(data.endpoint||''));}catch{throw Error('模型接口地址无效，请填写完整的 HTTPS 地址或本机服务地址');}
@@ -30,7 +41,7 @@
     if(!cleanPath||/^\/(?:api\/)?v1$/.test(cleanPath))url.pathname=(cleanPath||(['api.openai.com','api.moonshot.cn','api.moonshot.ai'].includes(url.hostname)?'/v1':''))+'/chat/completions';
     if(/\/(responses|messages)$/.test(cleanPath))throw Error('当前仅支持 Chat Completions 接口，请使用 /v1/chat/completions 地址');
     if(!String(data.model||'').trim()||String(data.model).length>150)throw Error('请填写服务提供方支持的模型 ID');
-    return {enabled:true,endpoint:url.href,model:String(data.model).trim(),jsonMode:!!data.jsonMode,...['disabled','default'].includes(data.thinkingMode)?{thinkingMode:data.thinkingMode}:{},originPattern:url.protocol+'//'+url.hostname+'/*'};
+    return {enabled:true,endpoint:url.href,model:String(data.model).trim(),jsonMode:!!data.jsonMode,...['disabled','default'].includes(data.thinkingMode)?{thinkingMode:data.thinkingMode}:{},originPattern:originPattern(url.href)};
   }
   function reviewable(row,values){return !row.verified&&!row.aiLocked&&!row.touched&&!row.draft?.value?.trim()&&(!row.select.value||!values[row.select.value]||row.aiReview===true);}
   function build(fields,values,{shareValues=false,page}={}){
@@ -46,12 +57,27 @@
     if(JSON.stringify(packet).length>150000)throw Error('AI 请求内容过大，请减少字段或关闭附带简历值');
     return packet;
   }
+  // A declared candidate must sit inside the field's own section and record.
+  // This is a pure path check: it needs no resume values, so the extension and
+  // the local gateway reach the same verdict on the same packet.
+  function scopePath(field,path){
+    const m=matcher();
+    if(m&&typeof m.allowedPath==='function')return !!m.allowedPath(field,path);
+    const section=field?.section;
+    if(!section)return true;
+    if(section==='family')return path.startsWith('family.'+(field.familyRole?field.familyRole+'.':''));
+    const records=(m&&m.recordSections)||[];
+    if(!['basics',...records].includes(section))return true;
+    if(!path.startsWith(section+'.'))return false;
+    if(section==='basics')return true;
+    return !Number.isInteger(field.recordIndex)||path.startsWith(section+'.'+field.recordIndex+'.');
+  }
   function validatePacket(packet,values){
     if(!packet||packet.version!==1||!Array.isArray(packet.fields)||!Array.isArray(packet.candidates)||!packet.fields.length||packet.fields.length>100||packet.candidates.length>400||JSON.stringify(packet).length>150000)throw Error('AI 请求结构无效或过大');
     const seen=new Set();
     for(const f of packet.fields){if(!f||typeof f.id!=='string'||seen.has(f.id)||typeof f.label!=='string'||protectedField(f))throw Error('AI 请求包含重复、无效或受保护字段');seen.add(f.id);}
     const paths=new Set(packet.candidates.map(c=>c?.path));if(paths.size!==packet.candidates.length)throw Error('候选路径重复');
-    for(const f of packet.fields){if(f.candidatePaths!==undefined){const allowed=matcher().candidatePaths(f,values);if(!Array.isArray(f.candidatePaths)||!f.candidatePaths.length||f.candidatePaths.length>(f.section==='basics'?48:12)||new Set(f.candidatePaths).size!==f.candidatePaths.length||f.candidatePaths.some(p=>!paths.has(p)||!allowed.includes(p)))throw Error('字段候选超出必要范围');}}
+    for(const f of packet.fields){if(f.candidatePaths!==undefined){if(!Array.isArray(f.candidatePaths)||!f.candidatePaths.length||f.candidatePaths.length>(f.section==='basics'?48:12)||new Set(f.candidatePaths).size!==f.candidatePaths.length||f.candidatePaths.some(p=>!paths.has(p)||!scopePath(f,p)))throw Error('字段候选超出必要范围');}}
     if(packet.fields.every(f=>Array.isArray(f.candidatePaths))&&packet.candidates.some(c=>!packet.fields.some(f=>f.candidatePaths.includes(c.path))))throw Error('包含未使用的简历候选');
     for(const c of packet.candidates){if(!c||typeof c.path!=='string'||!Object.hasOwn(values,c.path)||!values[c.path])throw Error('候选路径不存在于当前简历');if(!packet.shareValues&&Object.hasOwn(c,'value'))throw Error('未启用发送简历值');if(packet.shareValues&&c.value!==String(values[c.path]).slice(0,1200))throw Error('简历值与本地资料不一致');}
     return packet;
@@ -78,6 +104,6 @@
     return ((host==='api.deepseek.com'&&['deepseek-flash','deepseek-v4-pro'].includes(config.model))||(['api.moonshot.cn','api.moonshot.ai'].includes(host)&&config.model==='kimi-k2.6'))?{thinking:{type:'disabled'}}:{};
   }
   function requestBody(config,packet){return {...requestOptions(config),model:config.model,messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify(packet)}],stream:false,...config.jsonMode?{response_format:{type:'json_object'}}:{}};}
-  root.ResumeAI={reviewable,settings,build,validatePacket,parseResponse,requestBody,requestOptions,protectedField,normalizeKey,httpError,toolFailure};
+  root.ResumeAI={reviewable,settings,build,validatePacket,parseResponse,requestBody,requestOptions,protectedField,normalizeKey,httpError,toolFailure,originPattern,scopePath};
   if(typeof module!=='undefined')module.exports=root.ResumeAI;
 })(globalThis);

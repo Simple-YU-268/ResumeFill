@@ -20,7 +20,7 @@ safe(async()=>{const {adapters}=await chrome.storage.local.get('adapters');$('ad
 $('saveAdapters').onclick=()=>safe(async()=>{const adapters=ResumeAdapters.validate(JSON.parse($('adapters').value));await chrome.storage.local.set({adapters});status('站点规则已保存；刷新招聘页面后重新扫描。');});
 $('importAdapters').onchange=()=>safe(async()=>{const file=$('importAdapters').files[0];if(!file)return;const data=ResumeAdapters.validate(JSON.parse(await file.text()));$('adapters').value=JSON.stringify(data,null,2);status('规则已导入编辑器，点击保存后生效。');});
 $('demoAdapters').onclick=()=>safe(async()=>{$('adapters').value=JSON.stringify(await(await fetch('sample-adapters.json')).json(),null,2);status('本地演示规则已载入；点击保存后使用 demo-advanced.html 测试。');});
-safe(async()=>{const {aiSettings={}}=await chrome.storage.local.get('aiSettings');$('aiEnabled').checked=!!aiSettings.enabled;$('aiEndpoint').value=aiSettings.endpoint||'';$('aiModel').value=aiSettings.model||'';$('aiJson').checked=!!aiSettings.jsonMode;});
+safe(async()=>{const {aiSettings={}}=await chrome.storage.local.get('aiSettings');$('aiEnabled').checked=!!aiSettings.enabled;$('aiEndpoint').value=aiSettings.endpoint||'';$('aiModel').value=aiSettings.model||'';$('aiJson').checked=!!aiSettings.jsonMode;$('aiThinking').value=aiSettings.thinkingMode||'auto';});
 $('saveAI').onclick=()=>safe(async()=>{
   const config=ResumeAI.settings({enabled:$('aiEnabled').checked,endpoint:$('aiEndpoint').value,model:$('aiModel').value,jsonMode:$('aiJson').checked,thinkingMode:$('aiThinking').value});
   if(config.enabled&&!await chrome.permissions.request({origins:[config.originPattern]}))throw Error('服务域名未授权，未保存设置');
@@ -37,7 +37,7 @@ async function applyConnection(data){const u=new URL(data.endpoint);if(data.vers
  if(data.kind==='resumefill-pairing'){
   if(typeof data.code!=='string'||data.code.length<32||data.code.length>256)throw Error('配对内容缺少有效配对码');
   if(typeof data.expiresAt==='number'&&Date.now()>data.expiresAt)throw Error('配对码已过期，请在桌面端重新获取');
-  if(!await chrome.permissions.contains({origins:[u.origin+'/']})&&!await chrome.permissions.request({origins:[u.origin+'/']}))throw Error('本机服务地址未授权，无法完成配对');
+  const pattern=ResumeAI.originPattern(u.origin);if(pattern&&!await chrome.permissions.contains({origins:[pattern]})&&!await chrome.permissions.request({origins:[pattern]}))throw Error('本机服务地址未授权，无法完成配对');
   const r=await fetch(u.origin+'/v1/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:data.code}),signal:AbortSignal.timeout(5000),redirect:'error',credentials:'omit'});const d=await r.json().catch(()=>({}));
   if(!r.ok||typeof d.token!=='string'||d.token.length<32||d.token.length>256)throw Error(d.error||'配对失败，配对码可能已被使用或过期');
   const config=ResumeAI.settings({enabled:true,endpoint:u.href,model:'resumefill-local',jsonMode:true});
