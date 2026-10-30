@@ -52,7 +52,7 @@ const contentTypes = {
         const scan = document.querySelector(".scan-panel");
         const review = document.querySelector(".review-panel");
         const fill = document.querySelector(".fill-panel");
-        return (
+        return Boolean(
           scan.compareDocumentPosition(review) &
             Node.DOCUMENT_POSITION_FOLLOWING &&
           review.compareDocumentPosition(fill) &
@@ -95,7 +95,7 @@ const contentTypes = {
           const profile = document.querySelector("#profileSection");
           const desktop = document.querySelector("#desktopSection");
           const ai = document.querySelector("#aiSection");
-          return (
+          return Boolean(
             profile.compareDocumentPosition(desktop) &
               Node.DOCUMENT_POSITION_FOLLOWING &&
             desktop.compareDocumentPosition(ai) &
@@ -158,6 +158,11 @@ const contentTypes = {
           false,
         );
         assert.equal(await page.locator(".welcome").count(), 1);
+        assert.equal(
+          await page.locator(".journey .icon").count(),
+          0,
+          "Journey steps must not inherit sidebar navigation icons",
+        );
         assert.equal(await page.locator("body").getAttribute("class"), "desktop-ui");
         assert.equal(
           await page.locator("#pairingRequests").evaluate((el) =>
