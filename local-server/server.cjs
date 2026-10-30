@@ -11,7 +11,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
  const version=typeof config.version==='string'&&/^[\w.-]{1,20}$/.test(config.version)?config.version:VERSION;
  const allowed=config.allowedExtensionIds||[];if(!Array.isArray(allowed)||allowed.some(id=>!/^[a-p]{32}$/.test(id)))throw Error('扩展 ID 白名单无效');
  const cache=new Map(),ttl=config.cacheTtlMs??300000,maxCache=config.maxCacheEntries??128,timeout=config.timeoutMs??20000;let active=0,pairFails=[];
- if(!Number.isFinite(ttl)||ttl<0||ttl>3600000||!Number.isInteger(maxCache)||maxCache<0||maxCache>512||!Number.isInteger(timeout)||timeout<100||timeout>22000)throw Error('缓存或超时设置无效');
+ if(!Number.isFinite(ttl)||ttl<0||ttl>3600000||!Number.isInteger(maxCache)||maxCache<0||maxCache>512||!Number.isInteger(timeout)||timeout<100||timeout>60000)throw Error('缓存或超时设置无效');
  const originAllowed=o=>!o||/^chrome-extension:\/\/[a-p]{32}$/.test(o)&&(!allowed.length||allowed.includes(o.split('://')[1]));
  const auth=req=>{const provided=String(req.headers.authorization||''),expected='Bearer '+config.token;const a=Buffer.from(provided),b=Buffer.from(expected);return a.length===b.length&&crypto.timingSafeEqual(a,b)||typeof config.sessionAuth==='function'&&provided.startsWith('Bearer ')&&config.sessionAuth(provided.slice(7),req.headers.origin)===true;};
  const send=(res,status,data)=>{if(res.destroyed||res.writableEnded)return;res.writeHead(status,{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
