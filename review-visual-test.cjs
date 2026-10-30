@@ -74,19 +74,106 @@ const contentTypes = {
     );
     const fillbar = await popup.locator(".fillbar").boundingBox();
     assert.ok(fillbar.y + fillbar.height <= 901, "Sticky fill action must remain reachable");
+    await popup.keyboard.press("Tab");
+    assert.equal(
+      await popup.evaluate(() => document.activeElement.id),
+      "edit",
+      "Keyboard order must follow the visible scan actions",
+    );
     await popup.screenshot({
       path: path.join(root, "tmp/review-popup.png"),
       fullPage: true,
     });
+    await popup.evaluate(() => {
+      const fields = document.querySelector("#fields");
+      for (let index = 0; index < 30; index++) {
+        const row = document.createElement("div");
+        row.className = "row";
+        const label = document.createElement("label");
+        label.textContent = `第 ${index + 1} 个需要人工核对的招聘表字段`;
+        const select = document.createElement("select");
+        select.id = `fixture-field-${index}`;
+        select.append(new Option("基本信息 · 姓名", "basics.name"));
+        const input = document.createElement("input");
+        input.readOnly = true;
+        input.value = "用于检查长中文内容与固定填写操作是否互相遮挡";
+        label.append(select, input);
+        row.append(label);
+        fields.append(row);
+      }
+    });
+    for (const index of [0, 15, 29]) {
+      const control = popup.locator(`#fixture-field-${index}`);
+      await control.scrollIntoViewIfNeeded();
+      assert.equal(
+        await control.evaluate((el) => {
+          const field = el.getBoundingClientRect();
+          const fill = document.querySelector(".fillbar").getBoundingClientRect();
+          return field.top < fill.bottom && field.bottom > fill.top;
+        }),
+        false,
+        `Sticky fill action must not cover field ${index + 1}`,
+      );
+      assert.equal(
+        await popup.locator(".fillbar").evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          return rect.top >= 0 && rect.bottom <= innerHeight;
+        }),
+        true,
+      );
+    }
+    await popup.screenshot({
+      path: path.join(root, "tmp/review-popup-fields.png"),
+      fullPage: true,
+    });
     await popup.close();
 
-    for (const width of [1000, 700]) {
+    for (const width of [1000, 700, 360]) {
       const options = await browser.newPage({
         viewport: { width, height: 900 },
       });
-      options.setDefaultTimeout(5000);
-      await options.route("**/*.js", (route) => route.abort());
+      const optionsErrors = [];
+      options.on("pageerror", (error) => optionsErrors.push(error.message));
+      options.setDefaultTimeout(8000);
+      await options.route("**/desktop-connect.js", (route) => route.abort());
+      await options.addInitScript(() => {
+        const local = {
+          resume: { basics: { name: "Synthetic Candidate" } },
+          adapters: { version: 1, adapters: [] },
+          aiSettings: { enabled: false },
+        };
+        const session = {};
+        const result = (store, keys) => {
+          if (typeof keys === "string") return { [keys]: store[keys] };
+          if (Array.isArray(keys))
+            return Object.fromEntries(keys.map((key) => [key, store[key]]));
+          return { ...store };
+        };
+        window.chrome = {
+          storage: {
+            local: {
+              get: async (keys) => result(local, keys),
+              set: async (values) => Object.assign(local, values),
+              remove: async (keys) => {
+                for (const key of Array.isArray(keys) ? keys : [keys]) delete local[key];
+              },
+            },
+            session: {
+              get: async (keys) => result(session, keys),
+              set: async (values) => Object.assign(session, values),
+              remove: async (keys) => {
+                for (const key of Array.isArray(keys) ? keys : [keys]) delete session[key];
+              },
+            },
+            onChanged: { addListener: () => {} },
+          },
+          runtime: { sendMessage: async () => ({}), openOptionsPage: () => {} },
+          permissions: { contains: async () => true, request: async () => true },
+        };
+      });
       await options.goto(`${base}/options.html`);
+      await options.locator('[data-profile-path="basics.name"]').waitFor();
+      assert.deepEqual(optionsErrors, []);
       for (const name of ["个人资料", "连接桌面端", "AI 字段匹配"]) {
         await options.getByRole("region", { name, exact: true }).waitFor();
       }
@@ -106,11 +193,22 @@ const contentTypes = {
         "Options reading order must be profile, connection, then AI",
       );
       assert.equal(
-        await options.locator("#desktopSection #desktopSyncActions").count(),
-        1,
+        await options.locator("#desktopSyncActions button:visible").count(),
+        2,
+        "Real options initialization must render both desktop synchronization actions",
       );
       await options.getByRole("link", { name: "个人资料", exact: true }).click();
       assert.equal(await options.evaluate(() => location.hash), "#profileSection");
+      await options.locator("#saveAI").click();
+      await options.locator("#status").filter({ hasText: "AI 已关闭" }).waitFor();
+      assert.equal(
+        await options.locator("#status").evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          return rect.top >= 0 && rect.bottom <= innerHeight;
+        }),
+        true,
+        "Status feedback must remain in the viewport after a lower-page action",
+      );
       assert.equal(
         await options.evaluate(() => document.documentElement.scrollWidth > innerWidth),
         false,
@@ -142,9 +240,21 @@ const contentTypes = {
               connections: [],
               recentActivity: [],
               statistics: { scans: 3, attempted: 10, verified: 8 },
-              pairing: { pending: [], approved: [] },
+              pairing: {
+                pending: [
+                  {
+                    id: "synthetic-pairing",
+                    origin: "chrome-extension://synthetic",
+                    browser: "Edge",
+                  },
+                ],
+                approved: [],
+              },
             }),
             updateState: async () => ({ phase: "idle" }),
+            rejectPairing: async (id) => {
+              window.__rejectedPairing = id;
+            },
             onUpdate: () => {},
             onPDFProgress: () => {},
             setAutoCheck: async () => {},
@@ -171,6 +281,13 @@ const contentTypes = {
           false,
           "Pairing requests must not be hidden in secondary details",
         );
+        const reject = page.getByRole("button", { name: "拒绝", exact: true });
+        await reject.waitFor({ state: "visible" });
+        await reject.click();
+        assert.equal(
+          await page.evaluate(() => window.__rejectedPairing),
+          "synthetic-pairing",
+        );
         await page.locator("button").first().focus();
         assert.equal(
           await page.locator("button").first().evaluate((el) => getComputedStyle(el).outlineWidth),
@@ -186,7 +303,7 @@ const contentTypes = {
       }
     }
     console.log(
-      "PASS: popup scan→review→fill, options profile→connection→AI, desktop 1280×800 / 700×900, accessible regions, sticky action, pairing visibility, keyboard focus and no horizontal overflow",
+      "PASS: popup scan→review→fill with 30-field fixed-action clearance, live options sync/status in viewport, actionable pending pairing, keyboard order and no horizontal overflow at 360–1280px",
     );
   } finally {
     await browser.close();

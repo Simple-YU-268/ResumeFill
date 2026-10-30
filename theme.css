@@ -276,18 +276,29 @@ body.popup {
 }
 
 .fillbar {
-  position: sticky;
+  position: fixed;
   z-index: 3;
+  right: 20px;
   bottom: 10px;
+  left: 20px;
   display: grid;
+  max-width: 540px;
   grid-template-columns: auto minmax(180px, 1fr) auto;
   gap: 8px;
-  margin: 12px 0 8px;
+  margin: 0 auto;
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 10px;
   background: var(--surface-raised);
   box-shadow: 0 8px 24px rgb(38 63 57 / 10%);
+}
+
+body.popup {
+  padding-bottom: 100px;
+}
+
+.fill-panel {
+  padding-bottom: 84px;
 }
 
 .fill-hint {
@@ -414,6 +425,13 @@ body.options-ui {
 .settings-nav a:hover {
   background: var(--soft-bg);
   color: var(--primary);
+}
+
+.options-ui #status:not(:empty) {
+  position: sticky;
+  z-index: 5;
+  top: 57px;
+  box-shadow: 0 6px 18px rgb(38 63 57 / 10%);
 }
 
 .settings-section {
