@@ -78,7 +78,7 @@
           <span class="step-label">第 2 步</span>
         </div>
         <div id="summary" class="match-summary">先保存简历，再扫描招聘页面。</div>
-        <label class="check ai-check"><input id="autoAI" type="checkbox" checked> AI 主动匹配（启用模型后生效）</label>
+        <p class="ai-check"><label class="check"><input id="autoAI" type="checkbox" checked> AI 主动匹配（启用模型后生效）</label></p>
         <p id="aiStatus" class="muted" role="status">配置并启用模型后，扫描会自动请求字段建议；默认仅发送标签和候选路径。</p>
         <div id="normalization"></div>
         <div id="fields" aria-live="polite"></div>
@@ -148,7 +148,7 @@
         </div>
       </details>
     </footer>
-    <img id="pagePreview" hidden alt="当前视口截图，仅供人工核对">
+    <img id="pagePreview" src="buddy.svg" hidden alt="当前视口截图，仅供人工核对">
 
     <script src="metrics.js"></script>
     <script src="ai-calibration.js"></script>
