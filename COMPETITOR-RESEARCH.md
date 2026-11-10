@@ -62,11 +62,17 @@ A–E 改进已独立实现：邻接标签与嵌套说明回归、单位与开�
 
 ### 观察到的四项技术手法
 
-1. **字段识别**：主进程 `browserCollectFields`（`main/index.js:2646`）收集四套框架组件根（Element / Ant / View / semi-design），用 7 级标签降级链推断字段名，按 id → name → nth-of-type 生成 selector。
-2. **资料匹配**：`matchProfileField`（`:4853`）用加权置信度——label 0.70、name 0.68、id 0.68、placeholder 0.64；valueType 一致 +0.12、冲突 −0.25；封顶 0.98；阈值 0.62；输出 fill / skip / review 三态。
-3. **原生 setter 劫持**：`setNativeValue`（`:3220`）取 `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set` 绕过 React/Vue 的 value tracker，再由 `dispatchInputEvents`（`:3202`）补发 `InputEvent` 与 `change`。另有 `dispatchCommitEvents` 做 focus → 派发 → blur 的提交序列。
-4. **动态 SPA 适配**：`targetApplyFillPlan`（`:5084`）在填充过程中用 MutationObserver 观察 DOM 变化，配合 `resolveCurrentFillSelector` 重定位已失效控件；预算为 `MAX_DYNAMIC_FILL_FIELDS=50`、`DYNAMIC_FIELD_MUTATION_TIMEOUT_MS=1200`、稳定窗口 100 ms、最多 3 轮。
-5. **附件上传**：`targetSetFileInputFiles`（`:5440`）走 CDP：`DOM.getDocument` → `DOM.querySelector` → 先清空 `input.value` → `DOM.setFileInputFiles` → detach。
+1. **字段识别**：主进程 `browserCollectFields`（`main/index.js:2646`）收集四套框架组件根，按 id → name → nth-of-type 生成 selector。
+
+   **复核修正**：此前记为「Element / Ant / View / semi-design」，实为 **Element / Ant / iView / semi-design**——iView 的根为 `.ivu-input-wrapper`、`.ivu-select`、`.ivu-checkbox-wrapper`、`.ivu-radio-wrapper`、`.ivu-radio-group`、`.ivu-switch`、`.ivu-input-number`、`.ivu-date-picker`；semi-design 为 `[class*="sd-Dropdown-container"]` 与 `[class*="sd-Input-container"]`。不存在名为 "View" 的框架。
+
+   **复核修正**：其 7 级标签降级链（`labelFor`，`:2841`）实为 `aria-label` → `aria-labelledby` → `label[for]` → 祖先 label → placeholder → 相邻兄弟文本（`nearbyTextLabel`） → 组件内占位符（`placeholderFor`）。**不含单选组 legend，也不含 DT/DD**——这两级是本项目独有的更强判据。其 `nearbyTextLabel` 无界向上遍历父级且无歧义守卫；其 `aria-labelledby` 用全局 `document.getElementById` 解析，跨 Shadow Root 不安全。
+2. **资料匹配**：`matchProfileField`（`:4853`）用加权置信度——label 0.70、name 0.68、id 0.68、placeholder 0.64；label 已命中则 name/id 各 +0.04、placeholder +0.08；valueType 一致 +0.12、明确冲突 −0.25；html type 一致 +0.08；封顶 0.98；阈值 0.62；输出 fill / skip / review 三态。
+3. **站点 URL 匹配缺陷**：`main/index.js:2450` 用 `targetUrl.includes(workflow.targetSite.toLowerCase())` 做子串匹配。`targetSite` 为单字符（如 `"a"`）时会命中所有含该字符的 URL。本项目改用严格 origin 相等 + path 前缀（`adapters.js` 的 `hostnames` 既有校验要求明确域名、不支持通配符）。
+4. **高风险字段判定**：`highRiskFieldPattern`（`:3013`）为 `/password|passwd|passcode|otp|one-time|captcha|verify|verification|cvv|cvc|card|credit|cc-number|cc-csc|cc-exp|cc-name/i`。判定前先以 `identityCardFieldPattern`（`:3014`）剥离 id-card 词再匹配，避免「身份证」被 `card` 规则误伤为银行卡。
+5. **原生 setter 劫持**：`setNativeValue`（`:3220`）取 `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set` 绕过 React/Vue 的 value tracker，再由 `dispatchInputEvents`（`:3202`）补发 `InputEvent` 与 `change`。另有 `dispatchCommitEvents` 做 focus → 派发 → blur 的提交序列。
+6. **动态 SPA 适配**：`targetApplyFillPlan`（`:5084`）在填充过程中用 MutationObserver 观察 DOM 变化，配合 `resolveCurrentFillSelector` 重定位已失效控件；预算为 `MAX_DYNAMIC_FILL_FIELDS=50`、`DYNAMIC_FIELD_MUTATION_TIMEOUT_MS=1200`、稳定窗口 100 ms、最多 3 轮。
+7. **附件上传**：`targetSetFileInputFiles`（`:5440`）走 CDP：`DOM.getDocument` → `DOM.querySelector` → 先清空 `input.value` → `DOM.setFileInputFiles` → detach。
 
 ### 本项目的取舍
 
@@ -76,14 +82,23 @@ A–E 改进已独立实现：邻接标签与嵌套说明回归、单位与开�
 - 动态重定位的**目标**（填充途中控件被重渲染后继续，而不是整轮重来）。但不采用其 selector 重定位方式，改用本项目已有的语义身份重绑（`agent-recovery.js` `identity()` + `agent-bridge.js` 的 `signature()` 与唯一性纪律）。
 - 附件上传的**目标**（把本机文件字节送进 `input[type=file]`）。但不使用 CDP：Electron 主进程可用 `DOM.setFileInputFiles`，浏览器扩展侧则需 `chrome.debugger`，会产生调试横幅并要求高危权限。扩展场景改用 DataTransfer 注入 File 对象，等价且不需要额外权限。
 
+  2026-11-10 v2 修订：CDP 兜底重新纳入，但**限定在桌面端托管浏览器内**——扩展侧永不申请 `debugger` 权限，避免高危权限与「正在调试」横幅落到普通用户的 Chrome 上。
+
 **拒绝移植的部分**：
 
 - **放宽型加权匹配。** 其 0.62 阈值与 label/name/id/placeholder 权重会让「技术名恰好等于标签子串」的弱信号获得高分。本项目 `matcher.js` 已有更严谨的判据：语义精确命中优先、别名表、分节与记录隔离、家庭成员隔离、protectedLabel 永不匹配、数值区间带单位与开闭边界、阈值 78 且 top1−top2<10 弃权。竞品方案无 top1/top2 差值纪律，整体移植会造成能力倒退。其三态思想则以 `matcher.js` 内新增 `decide()` 包装实现，且置信度只用于候选排序与 UI 呈现，不参与任何阈值判定。
+
+  2026-11-10 v2 修订：加权通道**作为补充通道保留**，但不单独决定 `fill`。融合为双通道——通道 A 是本项目既有的语义通道（`infer()` / `match()`），通道 B 是竞品式加权。通道 B 的最佳候选**必须含 label 家族信号**才可判 `fill`；仅靠技术名（`name`/`id`）命中而无可见标签支撑时降级为 `review`。依据是 `matcher.js:112` 的既有注释：可见标签优先于技术名与 ID，`city-*` 这类内部 ID 不足以证明户籍控件应填现居城市。弃权阈值沿用其 0.62 与 0.08 差值，同时保留本项目通道 A 的 78 分阈值与 10 分差值纪律。
+- **URL 子串匹配。** 其 `targetUrl.includes(targetSite)`（`main/index.js:2450`）在 `targetSite` 为单字符时会命中所有含该字符的 URL。本项目提交闸门 L1/L2 改用严格 origin 相等 + path 前缀，不移植此缺陷。
 - **四套框架根的硬编码探测。** 本项目按语义与几何关联标签（`layout.js` `infer`/`associate`），处理 DT/DD、表格同行、单选组 legend、表单容器标签与可见关联标签，不绑定具体框架类名，因而覆盖竞品框架之外的对象（Layui、Moka）也无需新增根规则。
+
+  2026-11-10 v2 修订：组件根归类仍作为**附加信号**引入（`FieldSignal.component`，取值 Element / Ant / **iView** / semi-design / Layui / Moka / native），但不取代语义关联。核实发现本项目 `controls.js` 已有 `.ivu-select-item` / `.ivu-select-dropdown` 选项支持，却无 iView **组件根**归类——iView 站点目前会被当作原生 input 处理，此为真实缺口。
 - **重解析 CSS selector 的重定位。** selector 在 SPA 重渲染后极易失效或误命中他人控件；语义身份 + 唯一性要求的方案更保守。
 
 **不能由静态分析确定的部分**：其服务端模型与算法、登录后行为、未选模块、附件上传在真实站点上的成功率，以及 `DOM.setFileInputFiles` 之外的提交相关行为。上述观察仅为客户端源码事实，不是对其填写成功率或服务端能力的实测。
 
 ### 与本项目的关系
 
-本项目的字段识别与资料匹配**强于**该竞品，动态 SPA 适配已有更安全的实现形态。真实缺口只有附件上传（该竞品有、本项目完全没有）一项，详见 `docs/ENGINE-ARCHITECTURE.md` 的 M-D 模块方案。本次不引入其任何专有规则库、代码与资源。
+本项目的字段识别与资料匹配**强于**该竞品，动态 SPA 适配已有更安全的实现形态。真实缺口是附件上传与桌面端 PDF 生成（本项目完全没有），以及 iView 组件根归类。模块方案详见 `docs/ENGINE-ARCHITECTURE.md` v2 的 M1–M9。本次不引入其任何专有规则库、代码与资源。
+
+2026-11-10 补充复核的证据边界：以上权重、阈值、组件根清单、标签链层级、URL 匹配与高风险正则，均来自对解包后 `main/index.js` 的静态阅读，行号为该文件内偏移；不是对其运行时行为的实测。
