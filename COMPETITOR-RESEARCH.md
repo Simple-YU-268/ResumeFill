@@ -40,3 +40,50 @@
 ## 0.15.0 后续实现
 
 A–E 改进已独立实现：邻接标签与嵌套说明回归、单位与开闭区间（重叠转人工）、ARIA 优先及异步候选过滤、用户选容器和经历序号的局部预览/填写、按字段收敛模型候选并校验返回。相关测试见 semantic-test.cjs、scoped-browser-test.cjs 和 extension-test.cjs。仍不声称支持任意无索引虚拟列表，也未复现竞品服务端算法。
+
+## 职悟空网申 0.1.32（Electron 桌面端）
+
+调查日期：2026-11-10。目标为用户本机已安装的官方程序 `C:\Program Files\electron-autofill-desktop`。仅做**静态**分析：解包 ASAR 并阅读其一方源码，未运行该程序、未登录其账号、未调用其业务后端、未向任何招聘站点发送个人简历。原始包和完整 REA 导出保留在私人研究目录，不随本项目发布；本项目未复制其专有代码、规则库或资源。
+
+### 样本身份与证据
+
+| 项 | 值 |
+| --- | --- |
+| 程序版本 | 0.1.32 |
+| 运行时 | Electron 35.7.5 / Chromium 134 |
+| ASAR SHA256 | `6f810d13…` |
+| ASAR 文件数 | 1595（其中一方代码仅 37 个） |
+| fuses 证据 | `ev_ecdcda145cedc8ce9e28ef7de5ab1cd4405aebdcfb9331857f5fe0a9c59f648a` |
+| 全量 ASAR 证据 | `ev_0b55ff698479cc71dd35f441d10649ad94c90eb483463fc3a69fde14b059fbc7` |
+| main + preload 聚焦 | `ev_1165597e2a51a65c6389dc514a9e54c931d048babb7d2a70999b1564907cfe50` |
+| renderer 聚焦 | `ev_16eb71313f94465bcf601b90fc0133071116c62dbf06196ce1d63cf41c227fd0` |
+
+版本号取实际安装包内 manifest，不以安装目录名或外层文件名替代。
+
+### 观察到的四项技术手法
+
+1. **字段识别**：主进程 `browserCollectFields`（`main/index.js:2646`）收集四套框架组件根（Element / Ant / View / semi-design），用 7 级标签降级链推断字段名，按 id → name → nth-of-type 生成 selector。
+2. **资料匹配**：`matchProfileField`（`:4853`）用加权置信度——label 0.70、name 0.68、id 0.68、placeholder 0.64；valueType 一致 +0.12、冲突 −0.25；封顶 0.98；阈值 0.62；输出 fill / skip / review 三态。
+3. **原生 setter 劫持**：`setNativeValue`（`:3220`）取 `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set` 绕过 React/Vue 的 value tracker，再由 `dispatchInputEvents`（`:3202`）补发 `InputEvent` 与 `change`。另有 `dispatchCommitEvents` 做 focus → 派发 → blur 的提交序列。
+4. **动态 SPA 适配**：`targetApplyFillPlan`（`:5084`）在填充过程中用 MutationObserver 观察 DOM 变化，配合 `resolveCurrentFillSelector` 重定位已失效控件；预算为 `MAX_DYNAMIC_FILL_FIELDS=50`、`DYNAMIC_FIELD_MUTATION_TIMEOUT_MS=1200`、稳定窗口 100 ms、最多 3 轮。
+5. **附件上传**：`targetSetFileInputFiles`（`:5440`）走 CDP：`DOM.getDocument` → `DOM.querySelector` → 先清空 `input.value` → `DOM.setFileInputFiles` → detach。
+
+### 本项目的取舍
+
+**移植的部分**：
+
+- 原生 setter 劫持与 focus/set/blur 提交序列。本项目 `controls.js:225` 早已取原型 `value` 的 setter 绕过 value tracker，本次补齐 `InputEvent` 与提交序列，并新增 `checked` 的原型 setter 预留。
+- 动态重定位的**目标**（填充途中控件被重渲染后继续，而不是整轮重来）。但不采用其 selector 重定位方式，改用本项目已有的语义身份重绑（`agent-recovery.js` `identity()` + `agent-bridge.js` 的 `signature()` 与唯一性纪律）。
+- 附件上传的**目标**（把本机文件字节送进 `input[type=file]`）。但不使用 CDP：Electron 主进程可用 `DOM.setFileInputFiles`，浏览器扩展侧则需 `chrome.debugger`，会产生调试横幅并要求高危权限。扩展场景改用 DataTransfer 注入 File 对象，等价且不需要额外权限。
+
+**拒绝移植的部分**：
+
+- **放宽型加权匹配。** 其 0.62 阈值与 label/name/id/placeholder 权重会让「技术名恰好等于标签子串」的弱信号获得高分。本项目 `matcher.js` 已有更严谨的判据：语义精确命中优先、别名表、分节与记录隔离、家庭成员隔离、protectedLabel 永不匹配、数值区间带单位与开闭边界、阈值 78 且 top1−top2<10 弃权。竞品方案无 top1/top2 差值纪律，整体移植会造成能力倒退。其三态思想则以 `matcher.js` 内新增 `decide()` 包装实现，且置信度只用于候选排序与 UI 呈现，不参与任何阈值判定。
+- **四套框架根的硬编码探测。** 本项目按语义与几何关联标签（`layout.js` `infer`/`associate`），处理 DT/DD、表格同行、单选组 legend、表单容器标签与可见关联标签，不绑定具体框架类名，因而覆盖竞品框架之外的对象（Layui、Moka）也无需新增根规则。
+- **重解析 CSS selector 的重定位。** selector 在 SPA 重渲染后极易失效或误命中他人控件；语义身份 + 唯一性要求的方案更保守。
+
+**不能由静态分析确定的部分**：其服务端模型与算法、登录后行为、未选模块、附件上传在真实站点上的成功率，以及 `DOM.setFileInputFiles` 之外的提交相关行为。上述观察仅为客户端源码事实，不是对其填写成功率或服务端能力的实测。
+
+### 与本项目的关系
+
+本项目的字段识别与资料匹配**强于**该竞品，动态 SPA 适配已有更安全的实现形态。真实缺口只有附件上传（该竞品有、本项目完全没有）一项，详见 `docs/ENGINE-ARCHITECTURE.md` 的 M-D 模块方案。本次不引入其任何专有规则库、代码与资源。
