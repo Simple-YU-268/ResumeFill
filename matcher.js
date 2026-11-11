@@ -251,6 +251,42 @@
     const ordered=[...new Set([known?.path,...paths].filter(Boolean))];
     return ordered.filter(path=>values[path]&&allowedPath(field,path)).slice(0,6).map(path=>({path,reason:known?.path===path?'本地字段匹配':'候选资料，请核对',confirmed:known?.path===path}));
   }
+  function decide(field={},values={}){
+    const fieldId=field.stableId??field.id??null;
+    const risk=field.type==='password'||field.valueType==='password'||field.risk==='protected'||
+      [field.label,field.name,field.id,field.placeholder,field.autocomplete].some(label=>protectedLabel({label}))||
+      root.ResumeAnswers?.protectedField(field)?'protected':field.risk??'normal';
+    const result=(action,reason,confidence=0,sourcePath=null,alternatives=[])=>({fieldId,action,confidence,sourcePath,reason,alternatives,risk});
+    if(risk==='protected')return result('block','受保护字段');
+    if(field.visible===false||field.scopeExcluded)return result('skip','不在可见填写范围');
+    if(field.ambiguousLabel||field.contextBlocked||field.workBindingRequired||field.familyAmbiguous)return result('review','字段归属需要核对');
+    field=resolveField(field,values);
+    if(!field||recordSections.includes(field.section)&&!Number.isInteger(field.recordIndex))return result('review','经历记录尚未绑定');
+    const eligible=path=>allowedPath(field,path)&&Object.hasOwn(values,path)&&String(values[path]??'').trim();
+    const expected=path=>({ 'basics.email':'email','basics.phone':'phone','basics.website':'url' })[path];
+    const conflict=path=>expected(path)&&['email','phone','url','number','integer','date','month','year'].includes(field.valueType)&&expected(path)!==field.valueType;
+    const exact=infer(field), matched=match(field,values);
+    if(matched&&eligible(matched.path)&&!conflict(matched.path)&&!['high','identity'].includes(risk)){
+      return result('fill','本地字段匹配',exact?.path===matched.path?0.98:Math.min(.97,.78+Math.max(0,matched.score-78)*.19/22),matched.path);
+    }
+    const signals=[field.label,field.name,field.id,field.placeholder].map(labelVariants);
+    const ranked=Object.keys(values).filter(path=>eligible(path)&&!path.startsWith('fieldAnswers.')).map(path=>{
+      const aliases=namesFor(path).map(normalize).filter(Boolean);
+      const [label,name,id,placeholder]=signals.map(tokens=>tokens.some(token=>aliases.includes(token)));
+      let score=label ? .70+.04*Number(name)+.04*Number(id)+.08*Number(placeholder):Math.max(name||id ? .68 : 0,placeholder ? .64 : 0);
+      if(score){
+        if(expected(path)&&expected(path)===field.valueType)score+=.12;
+        if(conflict(path))score-=.25;
+        if(expected(path)&&expected(path)===(field.htmlType==='tel'?'phone':field.htmlType))score+=.08;
+      }
+      return {path,confidence:Math.max(0,Math.min(.98,score)),reason:'字段信号匹配，请核对'};
+    }).filter(item=>item.confidence>0).sort((a,b)=>b.confidence-a.confidence);
+    const [first,second]=ranked;
+    if(matched&&eligible(matched.path))return result('review','资料类型或敏感字段需要核对',first?.confidence??0,null,ranked.slice(0,6));
+    if(!first||first.confidence<.62)return result('skip','没有足够的匹配证据',first?.confidence??0);
+    if(second&&first.confidence-second.confidence<.08)return result('skip','匹配候选有歧义',first.confidence);
+    return result('review','补充信号需要核对',first.confidence,null,ranked.slice(0,6));
+  }
   function referenceData(path,values){
     const value=String(values[path]??''),language=path.match(/^(languages\.\d+)\.level$/);
     if(language)return {sourceValue:value,kind:'language',level:value,score:String(values[language[1]+'.score']??'')};
@@ -259,6 +295,6 @@
     const skill=path.match(/^(skills\.\d+)\.name$/),category=skill&&values[skill[1]+'.category'];
     return {sourceValue:value,kind:/^basics\.(?:city|hukouAddress|nativePlace|expectedCity)$/.test(path)?'region':'exact',parts:category?[String(category),value]:value.split(/\s*[>＞→]\s*/).filter(Boolean)};
   }
-  root.ResumeMatcher={workProfile,bindWork,familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,optionContains,numericInterval,numericOptions,allowedPath,candidatePaths};
+  root.ResumeMatcher={workProfile,bindWork,familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,decide,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,optionContains,numericInterval,numericOptions,allowedPath,candidatePaths};
   if (typeof module!=='undefined') module.exports=root.ResumeMatcher;
 })(globalThis);

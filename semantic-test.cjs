@@ -1,4 +1,22 @@
 const assert=require('node:assert/strict'),M=require('./matcher.js'),AI=require('./ai.js'),O=require('./option-match.js');
+{
+  const values={'basics.email':'candidate@example.test','basics.phone':'000','work.1.company':'Synthetic'};
+  const decide=field=>M.decide({stableId:'node-1',...field},values);
+  const exact=decide({label:'邮箱'});
+  assert.equal(exact.action,'fill');
+  assert.equal(exact.fieldId,'node-1');
+  assert.equal(exact.sourcePath,'basics.email');
+  assert.ok(exact.confidence>=.95);
+  const weak=decide({name:'email'});
+  assert.equal(weak.action,'review');
+  assert.equal(weak.sourcePath,null);
+  assert.equal(weak.alternatives[0].path,'basics.email');
+  assert.equal(decide({name:'email',id:'phone'}).action,'skip');
+  assert.equal(decide({label:'邮箱',name:'otp'}).action,'block');
+  assert.equal(decide({label:'公司名称',section:'work',recordIndex:0}).action,'skip');
+  assert.equal(decide({label:'公司名称',section:'work'}).action,'review');
+  assert.equal(decide({label:'邮箱',valueType:'number'}).action,'review');
+}
 const field={label:'工作年限'};
 const options=texts=>texts.map((text,i)=>({id:'o'+i,text}));
 const choose=(value,texts,f=field)=>M.numericOptions(value,options(texts),f);

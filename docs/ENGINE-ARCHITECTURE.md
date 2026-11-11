@@ -816,11 +816,11 @@ files: ["profile.js","matcher.js","layout.js","adapters.js","controls.js","answe
 | 阶段 | 内容 | 版本 | 主要验证 |
 | --- | --- | --- | --- |
 | P0 | 本文档 v2 + 架构评审 | 不升版本 | 文档评审 |
-| P1 | M2 决策层（先做，M1/M4/M6 都依赖它的输出结构） | 0.28.0 | `decide-test.cjs`；既有测试全绿 |
+| P1 | M2 决策接口已实现；待 M1 提供完整信号后接入预览 | 0.28.0 目标 | `semantic-test.cjs` |
 | P2 | M1 `detect` 层（`FieldSignal` + `valueType` + `component` + `risk` + 九级链 provenance） | 0.28.0 | `detect-test.cjs` + `detect-browser-test.cjs` |
 | P3 | M3 setter 补边角 | 0.28.0 | `controls-v06-test.cjs` 扩展 |
 | P4 | M4 动态适配（含填前快照与语义漂移回滚） | 0.29.0 | `spa-*-browser-test.cjs` 四组 |
-| P5 | M8 PDF 生成 + M5 附件链路 | 0.29.0 | `desktop/attachment-test.cjs` + `upload-browser-test.cjs` |
+| P5 | M5 附件链路，仅使用用户选择的现有文件；M8 PDF 产出暂缓 | 0.29.0 | `desktop/attachment-test.cjs` + `upload-browser-test.cjs` |
 | P6 | M5 附件匹配（Dice + 类型约束） | 0.30.0 | `attachment-match-test.cjs` |
 | P7 | M6 提交闸门（默认档） | 0.30.0 | `submit-gate-test.cjs` + `preflight-browser-test.cjs` |
 | P8 | M7 courier + 变体路由 + 回执 | 0.31.0 | `courier-test.cjs` + `receipt-test.cjs` |
@@ -892,6 +892,8 @@ JobHuntBot 是流程与资料组织层，不是可移植的代码库。本方案
 - 本文档所述能力均为**未实现**；发布前不得在版本说明或用户界面中宣称已具备。
 
 ## 变更记录
+
+- 2026-11-11：P1 新增 `ResumeMatcher.decide()`，不更改既有 `match()` 调用链。仅既有本地匹配通过隔离和风险校验后可返回 `fill`；加权信号使用 0.62 和 0.08 做候选弃权，只能返回 `review` 或 `skip`。初版类型证据覆盖邮箱、电话与网址。P5 不依赖 PDF 产出。
 
 - 2026-11-10（v2）：吸收职悟空网申 0.1.32 与 JobHuntBot 的方法，模块编号改为 M1–M9。落实核实结论：组件根为 Element/Ant/**iView**/semi-design（评审方案写作「View」）；竞品 7 级链无 legend 与 DT/DD，融合后为九级；`adapters.js:39` 的 FNV 是页面级指纹，逐字段指纹为新增；竞品 URL 子串匹配确认为缺陷，L1/L2 改为严格 origin 相等。决策变化：提交策略由「放弃自动提交」细化为 A0–A3 自治档位制，默认 A1 仍由人点击，A3 需 L0 声明 + 全局开关并单列为 P10。桌面端新增 PDF 生成能力（现无 `printToPDF`）。
 - 2026-11-10（v1）：依据 REA 对 Electron 网申桌面端的静态分析结论，以及对 main 分支 v0.27.1 的逐文件核实，改写「新建独立应用」方案为「resume-fill 内新增模块」方案。
