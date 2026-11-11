@@ -909,6 +909,21 @@
             ? { shadowScope: shadowDocumentKey + ":" + rootId(el) }
             : {}),
           label,
+          labelProvenance: config.label ? "adapter" : effectiveMokaLabel ? "container" :
+            structural.groupLabel ? (el.closest('[role="radiogroup"],fieldset')?.querySelector(':scope > legend')?.textContent.trim() === structural.groupLabel ? "legend" : "group") :
+            labels[0] ? "label" : linked.trim() ? "aria-labelledby" : el.getAttribute("aria-label") ? "aria-label" :
+            structural.label ? (el.closest("dd")?.previousElementSibling?.matches("dt") && structural.evidence === "定义列表标签" ? "dt-dd" : "structure") :
+            containerLabels[0] ? "container" : inferred.label ? "geometry" : el.placeholder ? "placeholder" : "attribute",
+          name: el.name || "",
+          placeholder: el.placeholder || "",
+          htmlType: el.getAttribute("type") || "",
+          valueType: d.type === "input" ? ({tel:"phone",email:"email",url:"url",number:"number",password:"password"})[el.type] || "text" : d.type,
+          visible: ResumeLayout.visible(el),
+          component: el.closest('.el-input,.el-select,.el-cascader,.el-date-editor') ? "element" :
+            el.closest('.ant-input,.ant-select,.ant-picker') ? "ant" :
+            el.closest('.ivu-input-wrapper,.ivu-select,.ivu-date-picker') ? "iview" :
+            d.config.mokaSelect ? "moka" : d.config.layuiSelect ? "layui" :
+            el.closest('[class*="sd-Dropdown-container"],[class*="sd-Input-container"]') ? "semi" : "native",
           tokens: tokens.length
             ? tokens
             : [

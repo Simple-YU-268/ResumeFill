@@ -7,6 +7,11 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  await page.evaluate(()=>{globalThis.chrome={runtime:{onMessage:{addListener:fn=>globalThis.listener=fn}}};});for(const f of ['adapters.js','content.js'])await page.addScriptTag({path:path.join(__dirname,f)});
  const scan=await page.evaluate(()=>new Promise(resolve=>listener({type:'RF_SCAN',adapters:{version:1,adapters:[]}}, {}, resolve)));const gender=scan.fields.find(f=>f.type==='radio');assert.equal(gender.label,'性别');
  const filled=await page.evaluate(id=>new Promise(resolve=>listener({type:'RF_FILL',items:[{id,value:'女'}]}, {}, resolve)),gender.id);assert.equal(filled.results[0].status,'verified');
+ assert.equal(gender.labelProvenance,'legend');
+ const emailSignal=scan.fields.find(f=>f.label==='电子邮箱');
+ assert.equal(emailSignal.labelProvenance,'dt-dd');
+ assert.equal(emailSignal.visible,true);
+ assert.equal(emailSignal.component,'native');
  // A reused visible portal has no ARIA link and existed before the click.
  await page.setContent('<input role="combobox" id="trigger" readonly><div role="listbox" id="menu"><div role="option">旧候选</div></div><div role="listbox" style="margin-top:200px"><div role="option">目标</div></div>');
  await page.evaluate(()=>{const input=document.querySelector('#trigger'),menu=document.querySelector('#menu');input.onclick=()=>{menu.replaceChildren();for(const text of ['目标','其他']){const o=document.createElement('div');o.setAttribute('role','option');o.textContent=text;o.onclick=()=>{input.value=text;};menu.append(o);}};});
