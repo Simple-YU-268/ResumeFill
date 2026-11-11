@@ -34,7 +34,7 @@
     ) &&
     o.getAttribute("aria-disabled") !== "true" &&
     !o.matches?.(
-      ".is-disabled,.ant-select-item-option-disabled,.el-select-dropdown__item--disabled,.layui-disabled",
+      ".is-disabled,.ant-select-item-option-disabled,.el-select-dropdown__item--disabled,.ivu-select-disabled,.ivu-select-item-disabled,.layui-disabled",
     ) &&
     (o.tagName !== "OPTION" || getComputedStyle(o).display !== "none");
   function refreshLayui(d) {
@@ -452,7 +452,7 @@
     if (d.type === "contenteditable") return d.el.innerText;
     if (d.type === "combobox" || d.config?.elementCascader) {
       const selected = d.el.querySelector(
-        ".ant-select-selection-item,.el-select__selected-item,.el-input__inner",
+        ".ant-select-selection-item,.el-select__selected-item,.el-input__inner,.ivu-select-selected-value",
       );
       return selected
         ? (selected.value ?? selected.innerText?.trim())

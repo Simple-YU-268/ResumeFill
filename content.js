@@ -234,7 +234,7 @@
         : el.type === "radio" || el.matches('[role="radiogroup"]')
           ? "radio"
           : el.matches(
-                '[role="combobox"],.el-select,.el-cascader,.ant-select,[class*="sd-Select-container-"]',
+                '[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"]',
               )
             ? "combobox"
             : ["date", "month", "datetime-local"].includes(el.type)
@@ -814,7 +814,7 @@
       }
       const candidates = shown(
         s.scope,
-        '[role="radiogroup"],[role="combobox"],.el-select,.el-cascader,.ant-select,[class*="sd-Select-container-"],input,textarea,select,[contenteditable="true"]',
+        '[role="radiogroup"],[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"],input,textarea,select,[contenteditable="true"]',
       );
       const used = new Set();
       const add = (el, config = {}) => {
@@ -1156,7 +1156,7 @@
       candidates.forEach((el) => {
         if (
           !el.parentElement?.closest(
-            '[role="combobox"],.el-select,.el-cascader,.ant-select,[class*="sd-Select-container-"],[contenteditable="true"]',
+            '[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"],[contenteditable="true"]',
           )
         )
           add(el);
