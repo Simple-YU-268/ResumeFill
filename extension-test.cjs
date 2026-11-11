@@ -69,7 +69,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const queue=await popup.evaluate(async()=>{
     const call=message=>chrome.runtime.sendMessage({type:'RF_RUN_COURIER',...message});
     const before=await call({action:'list'});
-    const added=await call({action:'enqueue',job:{id:'synthetic-run',companyKey:'synthetic-company',origin:'https://jobs.example.test'}});
+    const added=await call({action:'enqueue',job:{id:'synthetic-run',companyKey:'synthetic-company',origin:'https://jobs.example.test',confirmedByUser:true}});
     const duplicate=await call({action:'enqueue',job:{id:'synthetic-run',companyKey:'synthetic-company',origin:'https://jobs.example.test'}});
     return {before,added,duplicate};
   });

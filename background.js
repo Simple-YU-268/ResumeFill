@@ -5,10 +5,18 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(message.type!=='RF_RUN_COURIER')return;
   if(!sender.url?.startsWith(chrome.runtime.getURL(''))){reply({error:'Invalid source'});return;}
   const execute=async()=>{
-    const {applicationProgress=[],applicationProgressRevision=0}=await chrome.storage.local.get(['applicationProgress','applicationProgressRevision']);
+    const {applicationProgress=[],applicationProgressRevision=0,applicationRules={}}=await chrome.storage.local.get(['applicationProgress','applicationProgressRevision','applicationRules']);
     if(message.action==='list')return applicationProgress;
     if(message.action==='export')return ResumeCourier.receipts(applicationProgress);
-    const next=message.action==='enqueue'?ResumeCourier.enqueue(applicationProgress,message.job):
+    if(message.action==='rules')return ResumeCourier.validateRules(applicationRules);
+    if(message.action==='saveRules'){
+      const value=ResumeCourier.validateRules(message.rules);
+      await chrome.storage.local.set({applicationRules:value});
+      return value;
+    }
+    if(message.action==='screen')return ResumeCourier.screen(applicationProgress,message.job,applicationRules);
+    if(!['enqueue','recover','transition'].includes(message.action))throw Error('Invalid courier action');
+    const next=message.action==='enqueue'?ResumeCourier.enqueue(applicationProgress,message.job,Date.now(),applicationRules):
       message.action==='recover'?ResumeCourier.recover(applicationProgress,message.id):
       ResumeCourier.transition(applicationProgress,message.id,message.status,message.detail);
     await chrome.storage.local.set({applicationProgress:next,applicationProgressRevision:applicationProgressRevision+1});

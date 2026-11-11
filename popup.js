@@ -119,15 +119,52 @@ async function run(fn) {
 }
 let fillProgressId = null;
 const courierPanel = document.createElement("details");
+courierPanel.id = "courierPanel";
 const courierTitle = document.createElement("summary");
 courierTitle.textContent = "投递任务";
 const companyInput = document.createElement("input");
 companyInput.placeholder = "公司名称";
 companyInput.setAttribute("aria-label","投递任务公司名称");
 const courierStatus = document.createElement("p");
+courierStatus.id = "courierStatus";
 courierStatus.setAttribute("role","status");
 const courierList = document.createElement("div");
 courierPanel.append(courierTitle,companyInput,courierStatus,courierList);
+const jobTitleInput=document.createElement('input');
+jobTitleInput.placeholder='职位名称';
+jobTitleInput.maxLength=500;
+jobTitleInput.setAttribute('aria-label','投递任务职位名称');
+companyInput.maxLength=200;
+const screeningControls={};
+const screeningForm=document.createElement('div');
+screeningForm.className='courier-screening';
+screeningForm.append(companyInput,jobTitleInput);
+let screeningRevision=0;
+const screeningConfirmation=document.createElement('input');
+screeningConfirmation.type='checkbox';
+const confirmationLabel=document.createElement('label');
+confirmationLabel.className='courier-confirmation';
+confirmationLabel.append(screeningConfirmation,document.createTextNode('我已核对未确定的职位条件'));
+for(const [name,label,options] of [
+  ['availability','职位开放状态',[['unknown','尚未确定'],['open','正在招聘'],['closed','已关闭']]],
+  ['scope','职位范围',[['unknown','尚未确定'],['in-scope','在求职范围内'],['out-of-scope','超出求职范围']]],
+  ['eligibility','职位资格',[['unknown','尚未确定'],['eligible','符合资格'],['ineligible','不符合资格']]],
+]){
+ const control=document.createElement('select'),container=document.createElement('label');
+ control.setAttribute('aria-label',label);
+ for(const [value,text] of options){const option=document.createElement('option');option.value=value;option.textContent=text;control.append(option);}
+ container.append(document.createTextNode(label),control);
+ screeningControls[name]=control;
+ screeningForm.append(container);
+}
+for(const control of [companyInput,jobTitleInput,...Object.values(screeningControls)])control.addEventListener('input',()=>{
+ screeningConfirmation.checked=false;screeningRevision++;
+});
+screeningConfirmation.addEventListener('change',()=>screeningRevision++);
+courierStatus.before(screeningForm,confirmationLabel);
+const screeningReasons={closed:'职位已关闭','out-of-scope':'超出求职范围',ineligible:'不符合职位资格',duplicate:'职位已在队列中','company-quota':'该公司已有任务',
+ 'excluded-keyword':'命中排除关键词','outside-keywords':'不在期望关键词范围内','title-unknown':'职位名称尚未确定',
+ 'availability-unknown':'开放状态尚未确定','scope-unknown':'职位范围尚未确定','eligibility-unknown':'职位资格尚未确定'};
 $("resultCard").before(courierPanel);
 let currentApplication;
 async function courier(action,extra={}) {
@@ -148,7 +185,10 @@ async function refreshCourier() {
         try {
           if(!snapshot||new URL(snapshot.url).origin!==run.origin)throw Error("请先扫描任务对应网站");
           if(run.status==="handoff")await courier("transition",{id:run.id,status:"submitted",detail:{confirmedByUser:true}});
-          else currentApplication=run.id;
+          else {
+            if(!run.screened&&!screeningConfirmation.checked)throw Error('旧任务需要核对职位条件，请勾选确认后再使用');
+            currentApplication=run.id;
+          }
           courierStatus.textContent=run.status==="handoff"?"已记录用户确认":"任务已选中";
           await refreshCourier();
         }catch(error){courierStatus.textContent=error.message;}
@@ -177,23 +217,63 @@ async function refreshCourier() {
   }
 }
 const enqueueApplication=document.createElement("button");
-enqueueApplication.textContent="加入任务";
+enqueueApplication.textContent="检查并加入任务";
 enqueueApplication.onclick=async()=>{
+  enqueueApplication.disabled=true;
   try {
     if(!snapshot)throw Error("请先扫描当前表单");
+    const page=snapshot,revision=screeningRevision;
     const company=companyInput.value.normalize("NFKC").trim().toLowerCase();
     if(!company)throw Error("请填写公司名称");
+    const screening={title:jobTitleInput.value.trim(),...Object.fromEntries(Object.entries(screeningControls).map(([name,control])=>[name,control.value]))};
+    const confirmedByUser=screeningConfirmation.checked;
     const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(company));
     const companyKey=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,"0")).join("");
     const id=crypto.randomUUID();
-    await courier("enqueue",{job:{id,companyKey,origin:new URL(snapshot.url).origin}});
+    const job={id,companyKey,origin:new URL(page.url).origin,screening,confirmedByUser};
+    const decision=await courier('screen',{job});
+    if(page!==snapshot||revision!==screeningRevision)throw Error('职位条件或表单已变化，请重新检查');
+    const reasons=decision.reasons.map(reason=>screeningReasons[reason]||'请核对职位条件').join('；');
+    if(decision.action==='skip'||decision.action==='block')throw Error(reasons);
+    if(decision.action==='review'&&!confirmedByUser)throw Error('需要核对：'+reasons);
+    await courier("enqueue",{job});
     currentApplication=id;
     companyInput.value="";
+    jobTitleInput.value='';
+    screeningConfirmation.checked=false;
+    for(const control of Object.values(screeningControls))control.value='unknown';
+    screeningRevision++;
     courierStatus.textContent="任务已加入";
     await refreshCourier();
   }catch(error){courierStatus.textContent=error.message;}
+  finally{enqueueApplication.disabled=false;}
 };
 courierPanel.append(enqueueApplication);
+const screeningRules=document.createElement('fieldset');
+const screeningLegend=document.createElement('legend');
+screeningLegend.textContent='职位关键词筛选';
+screeningRules.append(screeningLegend);
+const ruleInputs={};
+for(const [name,text] of [['includeKeywords','期望关键词'],['excludeKeywords','排除关键词']]){
+ const label=document.createElement('label'),input=document.createElement('input');
+ input.setAttribute('aria-label',text);input.placeholder='Java, 后端';input.maxLength=3050;
+ label.append(document.createTextNode(text),input);screeningRules.append(label);ruleInputs[name]=input;
+ input.addEventListener('input',()=>{screeningConfirmation.checked=false;screeningRevision++;});
+}
+const saveScreeningRules=document.createElement('button');
+saveScreeningRules.type='button';saveScreeningRules.textContent='保存职位筛选';
+saveScreeningRules.onclick=async()=>{
+ saveScreeningRules.disabled=true;
+ try{
+  const rules=Object.fromEntries(Object.entries(ruleInputs).map(([name,input])=>[name,input.value.split(/[,，;；\n]/).map(word=>word.trim()).filter(Boolean)]));
+  const normalized=await courier('saveRules',{rules});
+  for(const [name,input] of Object.entries(ruleInputs))input.value=normalized[name].join(', ');
+  screeningConfirmation.checked=false;screeningRevision++;
+  courierStatus.textContent='筛选规则已保存';
+ }catch(error){courierStatus.textContent=error.message;}
+ finally{saveScreeningRules.disabled=false;}
+};
+screeningRules.append(saveScreeningRules);courierPanel.append(screeningRules);
 const exportApplications=document.createElement("button");
 exportApplications.type="button";
 exportApplications.textContent="导出任务回执";
@@ -209,7 +289,11 @@ exportApplications.onclick=async()=>{
   }catch(error){courierStatus.textContent=error.message;}
 };
 courierPanel.append(exportApplications);
-courierPanel.addEventListener("toggle",()=>{if(courierPanel.open)refreshCourier().catch(error=>{courierStatus.textContent=error.message;});});
+courierPanel.addEventListener("toggle",()=>{if(courierPanel.open)(async()=>{
+  const rules=await courier('rules');
+  for(const [name,input] of Object.entries(ruleInputs))input.value=rules[name].join(', ');
+  await refreshCourier();
+ })().catch(error=>{courierStatus.textContent=error.message;});});
 const attachResume = document.createElement("button");
 attachResume.type = "button";
 attachResume.textContent = "选择已导入的 PDF";
@@ -309,7 +393,7 @@ async function send(message) {
   if(message.type==="RF_FILL"&&currentApplication) {
     const run=(await courier("list")).find(row=>row.id===currentApplication);
     if(!run||run.origin!==new URL(snapshot.url).origin)throw Error("投递任务与当前网站不一致");
-    await courier("transition",{id:run.id,status:"running"});
+    await courier("transition",{id:run.id,status:"running",detail:{confirmedByUser:!run.screened&&screeningConfirmation.checked}});
     applicationId=run.id;
   }
   try {

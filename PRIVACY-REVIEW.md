@@ -61,3 +61,9 @@ This is a code and synthetic-fixture review, not evidence that the current live 
 ## 0.27.1 Element controls
 
 Live-page inspection was limited to control markup and opening/closing menus; no applicant values were changed or submitted. Public tests use synthetic profiles and locally constructed Element-compatible markup, not copied personal records or screenshots. Dropdown ownership remains document/root scoped; describedby targets must contain a recognized menu. Cascade paths require an exact hierarchy and verified displayed output.
+
+## M1-M9 development checkpoint reviewed 2026-11-11
+
+Job screening runs locally in the trusted extension background. Titles and user-declared availability, scope and eligibility are evaluated for that request only; application receipts retain only `screened: true`, never the title, company name, matching keyword or review text. Company identifiers are normalized SHA-256 keys. Literal include/exclude keywords stay in trusted local storage, independently of the resume and AI settings, and are not sent to AI or desktop heartbeats. New entries are checked against current saved rules at enqueue; webpage callers cannot modify these rules. Unknown conditions require explicit human review, while known exclusions cannot be overridden by that confirmation.
+
+The new end-to-end fixture uses a routed `example.test` website, synthetic candidate data and an isolated browser profile. It verifies no final submit, no private page query or title in exported receipts, and rejection of webpage-origin rule changes. Render screenshots remain in ignored `tmp/`; they contain only synthetic data. This checkpoint does not constitute a new packaged release or completion of all M1-M9 modules.

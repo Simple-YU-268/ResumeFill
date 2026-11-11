@@ -1,6 +1,6 @@
 # ResumeFill 填写引擎架构方案 v2
 
-> 蓝图文档（只出方案，未实现功能）。v2 基于 main 分支 v0.27.1 逐项核对：`matcher.js`、`controls.js`、`content.js`、`adapters.js`、`layout.js`、`page-bridge.js`、`agent-bridge.js`、`agent-recovery.js`、`answers.js`、`ai.js`、`background.js`、`popup.js`、`local-server/server.cjs`、`desktop/controller.cjs`、`desktop/main.cjs`、`desktop/pdf-service.cjs`、`scripts/*` 均已实际读取确认。行号对应当前提交。
+> 架构蓝图，当前实现与未完成项以 [ENGINE-IMPLEMENTATION.md](ENGINE-IMPLEMENTATION.md) 为准。v2 的原始代码核对基线为 main 分支 v0.27.1；原始行号只作定位参考。2026-11-11 按用户后续约定修订：不生成 PDF，上传用户在应用内导入的原始 PDF；最终提交一律由用户完成。
 >
 > v2 吸收了职悟空网申 0.1.32 的静态分析结论与 JobHuntBot 的流程方法，模块编号改用 M1–M9 命名。每一处「吸收」都标注了**已验证 / 需修正 / 全新**三种状态，方案与现实不符处以现实为准。
 
@@ -13,16 +13,16 @@
 | 资料匹配 | `decide()` 三态包装 | **M2 双通道融合**（语义通道 + 加权通道），四态 `fill/review/skip/block` | 需要可解释的置信度与候选排序，同时保留隔离纪律 |
 | 动态适配 | 身份重绑下沉 | **M4 升为独立核心模块**：双通道重定位 + 边填边发现 + 语义漂移回滚 + 空闲判定 | 这是本项目相对竞品最具差异化的能力，值得独立成模块 |
 | 附件 | 附件链路四段 | **M5** 追加 CDP 兜底与附件匹配（Dice 相似度 + 贪心分配 + 类型约束） | 附件是投递必需动作，且「简历栏只配简历」是硬需求 |
-| 提交 | 提交前自检（不点击） | **M6 提交闸门链 L0–L9**，默认档仍由人点击 | 闸门链本身是安全资产；自动点击作为高自治档的可选能力 |
+| 提交 | 提交前自检（不点击） | **M6 提交前检查链 L0–L9**，最终由人点击 | 保留核对与定位，不提供自动提交入口 |
 | 编排 | 降级为填充回执 | **M7 courier 状态机 + 投递预算** | 与 L0–L9 的配额门（L9）配套才有意义 |
 | 简历变体 | 独立存储 | 归入 **M7 路由** | 变体本质是「职位 → 简历」路由，不是独立特性 |
-| 桌面端 | 资料编辑器 + 附件库 | **M8** 增 autoFill 策略列、投递看板、审计回放器、AI 网关、**PDF 生成（全新）** | PDF 生成是 M5 附件字节的来源前提 |
+| 桌面端 | 资料编辑器 + 附件库 | **M8** 增 autoFill 策略列、投递看板、审计回放器、AI 网关、原始 PDF 管理 | 附件字节来自用户导入，无 PDF 生成依赖 |
 
 ## 1. 决策基线
 
 1. **在 resume-fill 基础上开发。** 不新建仓库与独立应用，复用现有 MV3 扩展 + Electron 桌面端 + loopback 网关三段结构。
-2. **默认不自动提交。** v1 的「放弃自动提交」在 v2 中细化为**自治档位制**：默认 A1（自动填 + 定位提交控件 + 人确认点击），A3（自动点击）需要站点适配显式声明 + 全局开关 + L0–L9 全链通过。详见 §9。
-3. **不重写核心引擎，只补齐缺口。** 核实后确认 resume-fill 的字段识别与资料匹配**比目标竞品更严谨**，动态适配甚至已有更安全的实现。把竞品方案整体搬进来会造成能力倒退。真正的工作是六件事：附件上传（从零）、PDF 生成（从零）、原生 setter 补边角、动态适配下沉到通用路径、`FieldSignal` 规范化、编排与闸门。
+2. **不自动提交。** 扫描、核对、填写、附件上传与提交前检查由软件辅助，最终投递由用户在网页完成。不实现自动提交档位、自动提交开关或自动提交消息接口。详见 §9。
+3. **复用核心引擎，补齐缺口。** 工作包括原始 PDF 导入与上传、原生 setter 补边角、动态适配下沉到通用路径、`FieldSignal` 规范化、资料策略、编排与提交前核对。PDF 生成不在范围内。
 
 ### 1.1 明确不做
 
@@ -54,10 +54,12 @@
 
 ### 2.2 真实缺口
 
+下表保留 v2 制定时的历史代码差距，不代表当前仍全部缺失；逐模块实现状态见实现跟踪文档。
+
 | 编号 | 缺口 | 证据 | 影响 |
 | --- | --- | --- | --- |
 | G-1 | **附件上传完全不存在** | 全仓库检索 `type="file"` / `DataTransfer` / `upload` 仅命中 CHANGELOG 一行；`content.js:194` `eligible()` 明确把 `file` 排除 | 简历投递的必需动作缺失 |
-| G-2 | **桌面端不产出可上传文件** | `desktop/pdf-service.cjs:18` 仅导出 `extract/parse/validate/schema`；全仓库无 `printToPDF` | M5 附件字节无本地来源 |
+| G-2 | **缺少用户原始 PDF 附件管理** | 当时的 `desktop/pdf-service.cjs` 仅解析资料，无独立原始附件导入链路 | M5 需要用户导入原始 PDF，不需要产出 PDF |
 | G-3 | **身份重绑只在 Agent 路径生效** | `agent-bridge.js:139` 在 `observe(run,recovery)` 内；`content.js:1324` `fill` 走不到 | 普通站点遇到 SPA 重渲染只能失败重来 |
 | G-4 | **setter 提交序列不完整** | `controls.js:225` 用普通 `Event("input")` 而非 `InputEvent`；无 focus→set→blur；无 `checked` 原生 setter | 受控组件可能不触发 onChange |
 | G-5 | **无统一决策输出** | `matcher.js:246` `suggestions` 有候选与理由，但无 fill/review/skip/block 判定 | UI 只能二态呈现 |
@@ -65,13 +67,13 @@
 | G-7 | **无投递编排与配额** | 全仓库无 job_pool / 状态机 / 配额概念 | 无法回答「这周投了多少、哪些没填上」 |
 | G-8 | **无 valueType / risk / framework 组件归类** | 全仓库检索 `valueType` 为空；`content.js:229` `kind` 只按元素类型分类 | 缺加权通道的强信号与风险分级 |
 | G-9 | **iView 组件根未归类** | `controls.js:89,147,247` 有 `.ivu-select-dropdown` / `.ivu-select-item` 选项支持，但 `content.js:237` 的扫描选择器与 `kind` 均无 `.ivu-*` 根 | iView 站点只能按原生 input 处理 |
-| G-10 | **无自治档位 / autoSubmit / trustedSubmitSelectors** | 全仓库无任何现有实现 | M6/M7 的前置 |
+| G-10 | **缺少提交前检查与人工回执** | 当时没有统一自检报告或投递回执 | M6/M7 需要检查与人工确认，无自动提交依赖 |
 
 ## 3. 总体架构
 
 ```text
 桌面端 (Electron)
-  资料编辑器(autoFill 策略列) · PDF 解析/OCR · PDF 生成(新增) · 附件库(新增)
+  资料编辑器(autoFill 策略列) · PDF 解析/OCR · 原始 PDF 附件库
   投递看板 · 审计回放器 · AI 网关(只发标签与候选路径)
         |
         | 本机 loopback 127.0.0.1:17322
@@ -570,32 +572,29 @@ input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
 
 ## 9. M6 · 提交闸门 submit
 
-**职责**：在提交前做完整的「是否可提交」判定，产出可解释的阻断原因；并定位提交控件。**默认档不自动点击**。
+**职责**：检查当前可见表单，产出可解释的待核对与阻断原因，定位提交控件。检查通过仅表示可以交给用户核对，不表示服务器接收或投递完成；任何模式都不自动点击最终提交。
 
-### 9.1 自治档位
+### 9.1 操作模式
 
 | 档 | 含义 | 提交动作 |
 | --- | --- | --- |
 | A0 | 只扫描与预览 | 不填不提交 |
 | A1 | 自动填 + 人确认提交 | **默认档**。定位提交控件并高亮，由人点击 |
 | A2 | 自动填 + 提交前闸门全过 + 人确认提交 | 闸门检查更严，仍由人点击 |
-| A3 | 自动填 + 闸门全过后自动点击 | 需站点适配声明 `trustedSubmitSelectors` + 全局开关开启 |
 
-**L0 的含义**：适配未声明 `trustedSubmitSelectors` -> **最高只能到 A2**。
-
-**全局档 >= 站点档**：站点只能下调自己的档位，不能上调。全局默认 A1。
+以上是目标界面的操作范围，不是自动提交授权等级。不引入 A3/A4；站点适配只可收紧已确认的填写范围。
 
 ### 9.2 闸门链 L0–L9
 
-任一不过 -> `submit-blocked` + 原因。
+任一检查不过时列出原因并交给用户处理；报告始终携带需要人工提交的状态，不产生点击许可。
 
 | 级 | 检查 | 判定 |
 | --- | --- | --- |
-| **L0** | 适配是否声明 `trustedSubmitSelectors` | 否 -> 档位上限 A2，自动点击不可用 |
+| **L0** | 已有用户核对的填写计划 | 否 -> 仅扫描与预览 |
 | **L1** | **origin 严格相等** | `new URL(pageUrl).origin === new URL(siteOrigin).origin`，**不使用 `includes`** |
 | **L2** | path 在适配 `pathPrefix` 内 | `pathname.startsWith(pathPrefix)` |
-| **L3** | 全局自治档 >= 站点自治档 | 否 -> 阻断 |
-| **L4** | 站点 `autoSubmit` 取值为 `ask` 或 `allowed` | `never` -> 直接拒 |
+| **L3** | 操作范围不超出用户确认的文档/区块/经历 | 超出范围 -> 停止并要求重新核对 |
+| **L4** | 最终提交保持人工操作 | 无自动提交消息、适配开关或可达点击分支 |
 | **L5** | 无验证码 / 滑块 / Cloudflare 信号 | 命中 `answers.js:3` 保护词、常见挑战元素 -> 阻断 |
 | **L6** | 无待确认敏感项 | 存在 `action==='review'` 的敏感字段 -> 阻断 |
 | **L7** | 无低置信填充 | 存在已填字段 `confidence < 0.62` -> 阻断 |
@@ -610,15 +609,13 @@ input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
 - 命中多个时按视觉顺序列出候选由人选择，**不猜测**。
 - 命中后滚动到可见位置并高亮，复用 `visual.js` 的能力，不新增样式体系。
 
-### 9.4 默认档的动作边界
+### 9.4 动作边界
 
-**默认 A1/A2 下，代码层不留任何自动点击路径。** `submit.js` 只做「判定 + 定位 + 高亮」，`click()` 调用只在 A3 生效时才可达，且 A3 需要 L0 通过 + 全局开关开启。
-
-`popup.html` 现有的「不自动提交申请」承诺在默认档保持成立；若将来开启 A3，文案必须同步改为「已开启自动提交（当前站点）」，不得让承诺与实际不一致。
+**代码层不留自动提交路径。** 提交检查仅做「判定 + 定位 + 高亮」；控件选择、上传、添加/保存经历等既有页面操作不能获得点击最终申请按钮的权限。只有用户在网页完成提交后，才能显式把任务回执记为 `submitted`。
 
 ### 9.5 测试
 
-- `submit-gate-test.cjs`（Node）：L0–L9 逐级阻断断言；L1 用 `includes` 陷阱用例（`targetSite:"a"` 不得命中 `https://b.example/x`）；L3 档位比较；L7 置信度阈值。
+- `submit-gate-test.cjs`（Node）：提交前检查原因与人工提交不变量；L1 用 `includes` 陷阱用例（`targetSite:"a"` 不得命中 `https://b.example/x`）；L3 范围比较；L7 置信度阈值。
 - `preflight-browser-test.cjs`：合成页全部必填已填 -> 闸门通过且定位到唯一提交按钮；存在空必填 -> 阻断并列出 label；**断言点击次数为 0**。
 
 ## 10. M7 · 投递编排 courier
@@ -646,7 +643,7 @@ JobHuntBot 建议 Volume 模式，但**必须有硬上限**：
 
 | 项 | 上限 | 说明 |
 | --- | --- | --- |
-| 每日投递总数 | 20 | A3/A4 档下的硬上限 |
+| 每日投递总数 | 20 | 队列入队与执行前统一检查 |
 | 单站冷却 | 30 分钟 | 同域名两次投递最小间隔 |
 | 单公司配额 | 1 份 | 「每公司限 1 份」，由 L9 强制 |
 | 失败熔断 | 同站连续失败 3 次 -> 暂停该站 24 小时 | 防止在坏站点空转 |
@@ -654,6 +651,8 @@ JobHuntBot 建议 Volume 模式，但**必须有硬上限**：
 **熔断与冷却是安全阀**，防止自动化在异常站点上反复重试。
 
 ### 10.3 简历变体路由
+
+**职位筛选实际接口（2026-11-11）**：`ResumeCourier.screen(rows, job, rules)` 输出 `{action: accept|review|skip|block, reasons: string[]}`。`job.screening` 接受当次人工核对的 `title`、`availability: open|closed|unknown`、`scope: in-scope|out-of-scope|unknown`、`eligibility: eligible|ineligible|unknown`。规则 `includeKeywords` / `excludeKeywords` 是 NFKC 归一化的字面关键词，不执行正则。关闭、超范围、重复、公司配额和关键词排除不能以确认绕过；未知条件需要 `confirmedByUser: true`。后台从独立的 `applicationRules` 读取最新规则并在入队时重新检查，填写前重检预算。职位标题、条件原文、规则命中词不进入任务回执，只保留 `screened: true`；历史未筛选任务启动前需要人工确认。批量职位池与变体路由尚未完成，以下为目标设计。
 
 **为什么不进 `resume` 主结构**：`resume` 的结构由 `desktop/pdf-service.cjs` `schema` 与 `matcher.js` `flatten` 共同定义，任何字段扩展都会波及既有测试与 `learning.js` 的路径校验。**隔离到独立存储是更小的风险面。**
 
@@ -714,14 +713,15 @@ JobHuntBot 建议 Volume 模式，但**必须有硬上限**：
 
 策略只影响 M2 的 `action` 产出，**不改变匹配算法**。保护字段恒为 `never`，且策略**不能**把 `protected` 字段改成可填。
 
-### 11.2 PDF 生成（全新）
+### 11.2 用户原始 PDF 简历
 
-**核实**：桌面端当前**没有** PDF 产出能力——`desktop/pdf-service.cjs:18` 仅导出 `extract/parse/validate/schema`，全仓库无 `printToPDF`。这是 M5 附件字节的来源前提。
+**范围修订**：按用户最新约定，不开发 PDF 产出。M5 的附件字节来自用户在应用内导入的原始 PDF，不经过资料排版或重新生成。
 
-- 位置：`desktop/pdf-service.cjs` 新增 `render(profile, options)`，用 Electron `webContents.printToPDF`。
-- 排版：单页精确排版，沿用既有 one-page 验收标准（页数、字号下限、无截断、无溢出）。
-- 输出：写入附件库并登记 `kind: 'resume'`；或直接导出为用户指定路径。
-- **不虚构内容**：只排版用户资料，缺字段留空，不补造。
+- 原始文件由桌面端读取并保存到私人数据目录；限制 15 MiB、校验 PDF 签名与读取期间的大小一致性。
+- 先读取文件名、大小和 SHA-256 元数据；用户确认目标表单和附件后才传递字节。
+- 确认绑定文件摘要、表单文档、目标节点和有效期；任一变化须重新确认。
+- 网页端注入后回读文件名、大小；页面或服务器接收结果由用户核对，最终提交由用户完成。
+- 既有 `desktop/pdf-service.cjs` 保留解析和资料提取用途，不增加 `render` 或 `printToPDF`。
 
 ### 11.3 投递看板与审计回放器
 
@@ -820,12 +820,11 @@ files: ["profile.js","matcher.js","layout.js","adapters.js","controls.js","answe
 | P2 | M1 `detect` 层（`FieldSignal` + `valueType` + `component` + `risk` + 九级链 provenance） | 0.28.0 | `detect-test.cjs` + `detect-browser-test.cjs` |
 | P3 | M3 setter 补边角 | 0.28.0 | `controls-v06-test.cjs` 扩展 |
 | P4 | M4 动态适配（含填前快照与语义漂移回滚） | 0.29.0 | `spa-*-browser-test.cjs` 四组 |
-| P5 | M5 附件链路，仅使用用户选择的现有文件；M8 PDF 产出暂缓 | 0.29.0 | `desktop/attachment-test.cjs` + `upload-browser-test.cjs` |
+| P5 | M5 附件链路，仅使用用户导入的原始 PDF，不开发 PDF 产出 | 0.29.0 | `desktop/attachment-test.cjs` + `upload-browser-test.cjs` |
 | P6 | M5 附件匹配（Dice + 类型约束） | 0.30.0 | `attachment-match-test.cjs` |
 | P7 | M6 提交闸门（默认档） | 0.30.0 | `submit-gate-test.cjs` + `preflight-browser-test.cjs` |
 | P8 | M7 courier + 变体路由 + 回执 | 0.31.0 | `courier-test.cjs` + `receipt-test.cjs` |
 | P9 | M9 弹窗四态 + content script 职责收敛 | 0.31.0 | 既有浏览器测试全绿 |
-| P10 | A3 档（自动点击）——**需单独评审** | 0.32.0 | 全链闸门 + 配额压测 |
 
 **版本策略**：
 
@@ -835,7 +834,7 @@ files: ["profile.js","matcher.js","layout.js","adapters.js","controls.js","answe
 - 每个可用版本提交前跑：`npm test`、`npm run test:browser`、`npm run test:desktop`、`npm run test:electron`、`npm run release:check`、`npm run privacy`、`npm run privacy:artifacts`。
 - 发布说明写入 `docs/releases/<version>.md`，CHANGELOG 补条目，`PRIVACY-REVIEW.md` 的 `Reviewed for v<version> on <date>` 同步更新（`scripts/check-release.cjs` 强制）。
 
-**P10 单列的理由**：A3 是本方案里唯一会让软件代替人点击「提交」的阶段，风险与前九个阶段不同量级，必须独立评审、独立版本、独立回滚。P1–P9 全部达成且闸门链在真实站点上稳定运行之前，不启动 P10。
+原蓝图的 P10 自动提交阶段已按用户后续约定移出本轮目标。P1–P9 不依赖自动提交或 PDF 产出。
 
 ## 16. 风险登记
 
