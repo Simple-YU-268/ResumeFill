@@ -118,12 +118,51 @@ async function run(fn) {
   }
 }
 let fillProgressId = null;
+const attachResume = document.createElement("button");
+attachResume.type = "button";
+attachResume.textContent = "选择已导入的 PDF";
+$("resultCard").before(attachResume);
+let attachmentApproval;
+attachResume.onclick = async () => {
+  attachResume.disabled = true;
+  try {
+    if (!snapshot || tabId == null) throw Error("请先扫描当前表单");
+    const request = async (sha256) => {
+      const result = await chrome.runtime.sendMessage({type:"RF_DESKTOP_RESUME_ATTACHMENT",sha256});
+      if (result?.error) throw Error(result.error);
+      if (!result) throw Error("请先在桌面端导入投递用 PDF");
+      return result;
+    };
+    if (!attachmentApproval) {
+      const page = snapshot;
+      const meta = await request();
+      const {token} = await send({type:"RF_RUN_UPLOAD"});
+      attachmentApproval = {page, token, sha256:meta.sha256};
+      attachResume.textContent = "确认附上 PDF";
+      $("status").textContent = "待附上：" + meta.fileName;
+      return;
+    }
+    const {page, token, sha256} = attachmentApproval;
+    if (snapshot !== page) throw Error("表单已变化，请重新选择附件");
+    const file = await request(sha256);
+    if (snapshot !== page || file.sha256 !== sha256 || !file.dataBase64) throw Error("表单或附件已变化，请重新确认");
+    const result = await send({...file,type:"RF_RUN_UPLOAD",token});
+    $("status").textContent = result.selected ? "已选中 PDF，请在网页上核对上传状态" : "无法确认附件状态，请在网页上核对";
+    attachmentApproval = null;
+  } catch (error) {
+    attachmentApproval = null;
+    $("status").textContent = error.message;
+  } finally {
+    if (!attachmentApproval) attachResume.textContent = "选择已导入的 PDF";
+    attachResume.disabled = false;
+  }
+};
 async function send(message) {
   if (agentRunning && message.type !== "RF_CANCEL")
     throw Error("Agent 正在操作页面，请先停止或等待");
   if (agentNeedsRescan && !["RF_SCAN", "RF_CANCEL"].includes(message.type))
     throw Error("Agent 已更新扫描，请先重新扫描页面");
-  if (["RF_FILL", "RF_PREPARE"].includes(message.type)) {
+  if (["RF_FILL", "RF_PREPARE", "RF_RUN_UPLOAD"].includes(message.type)) {
     try {
       const [active] = await chrome.tabs.query({
         active: true,

@@ -8,7 +8,7 @@
     "start": "electron .",
     "prepare:resources": "node prepare.cjs",
     "dist": "npm run prepare:resources && electron-builder --win nsis --x64",
-    "test": "node test.cjs && node pairing-test.cjs && node model-test.cjs && node updater-test.cjs && node updater-renderer-test.cjs && node family-renderer-test.cjs"
+    "test": "node resume-attachment-test.cjs && node test.cjs && node pairing-test.cjs && node model-test.cjs && node updater-test.cjs && node updater-renderer-test.cjs && node family-renderer-test.cjs"
   },
   "devDependencies": {
     "@tesseract.js-data/chi_sim": "1.0.0",

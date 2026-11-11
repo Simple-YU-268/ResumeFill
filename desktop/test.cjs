@@ -6,6 +6,14 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('nod
  try{const base='http://127.0.0.1:'+c.gateway.server.address().port;const extOrigin='chrome-extension://'+'a'.repeat(32);
   const rpc=async(action,data={},token=c.config.token,origin=extOrigin)=>{const r=await fetch(base+'/v1/desktop/'+action,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token,...(origin?{Origin:origin}:{})},body:JSON.stringify(data)});return {status:r.status,data:await r.json()};};
   assert.equal((await rpc('pull',{},'wrong')).status,401);
+  const attachmentPath=path.join(dir,'synthetic-resume.pdf');
+  fs.writeFileSync(attachmentPath,'%PDF-1.7\n%%EOF\n');
+  const attachment=c.saveResumeAttachment(attachmentPath);
+  assert.equal((await rpc('resume-attachment',{sha256:attachment.sha256},c.config.token,null)).status,403);
+  assert.equal((await rpc('resume-attachment',{sha256:attachment.sha256},'wrong')).status,401);
+  assert.deepEqual((await rpc('resume-attachment')).data,attachment);
+  assert.deepEqual((await rpc('resume-attachment',{sha256:'stale'})).data,attachment);
+  assert.equal(Buffer.from((await rpc('resume-attachment',{sha256:attachment.sha256})).data.dataBase64,'base64').toString(),'%PDF-1.7\n%%EOF\n');
   assert.equal((await rpc('pull',{},c.config.token,null)).status,403,'desktop endpoints must require an extension Origin even with a valid token');
   assert.equal((await rpc('push',{resume:{basics:{name:'Synthetic Candidate'},custom:{test:'value'}}})).status,200);assert.equal((await rpc('pull')).data.resume.custom.test,'value');
   assert.equal((await rpc('heartbeat',{clientId:'test-client',browser:'Edge',version:'0.16.0',task:{status:'needs_input',steps:4}})).status,200);assert.equal(c.status().connections.length,1);

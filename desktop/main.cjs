@@ -66,6 +66,14 @@ else {
     fs.mkdirSync(extension, { recursive: true });
     fs.cpSync(path.join(runtime, "extension"), extension, { recursive: true });
     const actions = {
+      chooseResumeAttachment: async () => {
+        const selected = await dialog.showOpenDialog(window, {
+          properties: ["openFile"],
+          filters: [{ name: "PDF", extensions: ["pdf"] }],
+        });
+        return selected.canceled ? null : controller.saveResumeAttachment(selected.filePaths[0]);
+      },
+      removeResumeAttachment: () => controller.removeResumeAttachment(),
       openRelease: () =>
         shell.openExternal(
           "https://github.com/Simple-YU-268/ResumeFill/releases/latest",

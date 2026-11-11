@@ -1553,6 +1553,37 @@
       }
     },
   };
+  let pendingAttachment;
+  function resumeAttachment(message) {
+    if (!scannedUrl || location.href !== scannedUrl) throw Error("请重新扫描当前表单");
+    const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
+    const candidates = [...new Set(roots.flatMap(root => shown(root, 'input[type="file"]')))].filter(el =>
+      !el.matches(':disabled,[aria-disabled="true"]') && !el.files.length &&
+      /简历|\b(?:resume|cv)\b/i.test([...Array.from(el.labels || []).filter(ResumeLayout.visible).map(text),el.getAttribute('aria-label')].join(' ')) &&
+      (!el.accept || el.accept.split(',').some(s => ['.pdf','application/pdf','application/*'].includes(s.trim().toLowerCase()))));
+    if (candidates.length !== 1) throw Error("请在网页上手动选择简历附件");
+    const input = candidates[0];
+    if (!message.dataBase64) {
+      const token = crypto.randomUUID();
+      pendingAttachment = { token, input, revision };
+      return { token };
+    }
+    const approved = pendingAttachment;
+    pendingAttachment = null;
+    if (!approved || approved.token !== message.token || approved.input !== input || approved.revision !== revision)
+      throw Error("附件栏已变化，请重新确认");
+    if (typeof message.fileName !== 'string' || !/\.pdf$/i.test(message.fileName) ||
+        !Number.isInteger(message.size) || message.size < 8 || message.size > 15 * 1024 * 1024 ||
+        message.dataBase64.length > 20 * 1024 * 1024) throw Error("无效的 PDF 附件");
+    const raw = atob(message.dataBase64);
+    if (raw.length !== message.size || !raw.startsWith('%PDF-')) throw Error("无效的 PDF 附件");
+    const win = input.ownerDocument.defaultView;
+    const dt = new win.DataTransfer();
+    dt.items.add(new win.File([Uint8Array.from(raw, c => c.charCodeAt(0))], message.fileName, {type:'application/pdf'}));
+    input.files = dt.files;
+    input.dispatchEvent(new win.Event('change', { bubbles:true, composed:true }));
+    return { selected: input.isConnected && input.files[0]?.name === message.fileName && input.files[0]?.size === message.size };
+  }
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.type === "RF_CANCEL") {
       operationController?.abort();
@@ -1566,6 +1597,7 @@
         "RF_SCOPE_LIST",
         "RF_SCOPE_SET",
         "RF_SCAN",
+        "RF_RUN_UPLOAD",
         "RF_LEARN_READ",
         "RF_FILL",
         "RF_VERIFY",
@@ -1582,6 +1614,7 @@
     }
     busy = true;
     pendingOperation = (async () => {
+      if (message.type === "RF_RUN_UPLOAD") return resumeAttachment(message);
       if (message.type === "RF_SCOPE_LIST") return { scopes: scopeList() };
       if (message.type === "RF_SCOPE_SET") return chooseScope(message);
       if (message.type === "RF_OCR_CONTEXT") return ocrContext();

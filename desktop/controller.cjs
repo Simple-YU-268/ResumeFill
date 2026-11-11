@@ -182,6 +182,39 @@ class Controller {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, file);
   }
+  saveResumeAttachment(file) {
+    const limit = 15 * 1024 * 1024;
+    const fd = fs.openSync(file, 'r');
+    let bytes;
+    try {
+      const stat = fs.fstatSync(fd);
+      if (!stat.isFile() || stat.size < 8 || stat.size > limit)
+        throw Error('PDF must be a file of at most 15 MiB');
+      bytes = Buffer.alloc(stat.size);
+      if (fs.readSync(fd, bytes, 0, bytes.length, 0) !== bytes.length ||
+          fs.fstatSync(fd).size !== bytes.length ||
+          bytes.subarray(0, 5).toString('ascii') !== '%PDF-')
+        throw Error('Invalid or changed PDF file');
+    } finally {
+      fs.closeSync(fd);
+    }
+    const metadata = { fileName: path.basename(file), size: bytes.length,
+      mime: 'application/pdf', sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
+    this.write(path.join(this.directory, 'resume-attachment.json'),
+      { ...metadata, dataBase64: bytes.toString('base64') });
+    return metadata;
+  }
+  resumeAttachment() {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(this.directory, 'resume-attachment.json'), 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+  removeResumeAttachment() {
+    fs.rmSync(path.join(this.directory, 'resume-attachment.json'), { force: true });
+  }
   profile() {
     const file = path.join(this.directory, "resume.json");
     return fs.existsSync(file)
@@ -262,6 +295,12 @@ class Controller {
         this.pairing().authenticate(token, origin),
       webOCR: (input, options) => this.webOCR.recognize(input, options),
       desktopHandler: (action, input) => {
+        if (action === "resume-attachment") {
+          const attachment = this.resumeAttachment();
+          if (!attachment) return null;
+          const { dataBase64, ...metadata } = attachment;
+          return input?.sha256 === metadata.sha256 ? attachment : metadata;
+        }
         this.audit.push({
           at: Date.now(),
           action,

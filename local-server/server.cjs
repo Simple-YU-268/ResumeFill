@@ -48,7 +48,7 @@ function createGateway(config,{fetchImpl=fetch}={}){
   if(!auth(req)){send(res,401,{error:'本地访问令牌无效',code:'RF_UNAUTHORIZED'});return;}
   if(['GET','POST'].includes(req.method)&&req.url==='/health'){try{if(req.method==='POST')await body(req,2000);send(res,200,{ok:true,version,identity:'ResumeFillAgent',engine:upstream?'upstream':'local-rules',agentCapabilities:{protocol:2,boundedRecovery:true},active,cacheEntries:cache.size});}catch(e){send(res,e.status||400,{error:e.message,code:e.code||'RF_JSON_INVALID'});}return;}
   const agentAction=req.url?.match(/^\/v1\/agent\/(start|result|error|resume|cancel|status)$/)?.[1];
-  const desktopAction=config.desktopHandler&&req.url?.match(/^\/v1\/desktop\/(heartbeat|pull|push)$/)?.[1];
+ const desktopAction=config.desktopHandler&&req.url?.match(/^\/v1\/desktop\/(heartbeat|pull|push|resume-attachment)$/)?.[1];
   const webOCR=req.url==='/v1/ocr/web'&&typeof config.webOCR==='function';
   if(req.method!=='POST'||!agentAction&&!desktopAction&&!webOCR&&!['/v1/chat/completions','/v1/match-fields','/v1/match-options','/v1/plan-recovery'].includes(req.url)){send(res,404,{error:'接口不存在',code:'RF_NOT_FOUND'});return;}
   if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){send(res,415,{error:'仅接受 application/json',code:'RF_CONTENT_TYPE'});return;}
