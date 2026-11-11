@@ -1336,9 +1336,40 @@
     }
     return results;
   }
+  function rebindKey({field:f}) {
+    return JSON.stringify([f.label,f.name,f.htmlType,f.placeholder,f.type,f.valueType,
+      f.section,f.recordIndex,f.path,f.context,f.familyRole,f.workModuleId,
+      f.datePart,f.datePath,f.regionRole,f.regionLevel,f.required]);
+  }
   async function fill(message) {
     if (location.href !== scannedUrl) throw Error("页面地址已变化，请重新扫描");
     operationController = new AbortController();
+    const original = [...registry.values()];
+    let rescans = 0;
+    function rebind(d) {
+      if (rescans >= 3 || message.saveCards || location.href !== scannedUrl ||
+          operationController.signal.aborted || d.ocrGuard || !d.sectionScope.scope.isConnected)
+        return null;
+      const key = rebindKey(d);
+      const same = candidate => candidate.root === d.root &&
+        candidate.sectionScope.scope === d.sectionScope.scope && rebindKey(candidate) === key;
+      if (original.filter(same).length !== 1) return null;
+      const before = registry, previousRevision = revision;
+      let matches;
+      try {
+        rescans++;
+        scan();
+        matches = [...registry.values()].filter(same);
+      } finally {
+        registry = before;
+        revision = previousRevision;
+      }
+      const next = matches[0];
+      if (matches.length !== 1 || next.field.ambiguousLabel || next.field.contextBlocked ||
+          next.field.familyAmbiguous || next.field.workBindingRequired ||
+          ResumeMatcher.decide(next.field, {}).action === "block") return null;
+      return {...next, field:{...next.field,id:d.field.id}};
+    }
     const results = [],
       touched = new Map();
     for (const item of message.items) {
@@ -1352,10 +1383,19 @@
           })
           ?.catch(() => {});
       } catch {}
-      const d = registry.get(item.id);
+      let d = registry.get(item.id);
       if (!d) {
         results.push({ id: item.id, status: "stale", error: "扫描已失效" });
         continue;
+      }
+      if (!d.el.isConnected && !item.verifyOnly) {
+        const next = rebind(d);
+        if (!next) {
+          results.push({id:item.id,status:"stale",error:"控件已变化，请重新扫描"});
+          continue;
+        }
+        d = next;
+        registry.set(item.id,d);
       }
       if (
         (selectedScope ||
