@@ -1,5 +1,22 @@
-importScripts('agent-recovery.js','metrics.js','ai-calibration.js','profile.js','matcher.js','option-match.js','answers.js','ai.js');
+importScripts('courier.js','agent-recovery.js','metrics.js','ai-calibration.js','profile.js','matcher.js','option-match.js','answers.js','ai.js');
 const requests=new Map();
+let courierQueue=Promise.resolve();
+chrome.runtime.onMessage.addListener((message,sender,reply)=>{
+  if(message.type!=='RF_RUN_COURIER')return;
+  if(!sender.url?.startsWith(chrome.runtime.getURL(''))){reply({error:'Invalid source'});return;}
+  const execute=async()=>{
+    const {applicationProgress=[]}=await chrome.storage.local.get('applicationProgress');
+    if(message.action==='list')return applicationProgress;
+    const next=message.action==='enqueue'?ResumeCourier.enqueue(applicationProgress,message.job):
+      ResumeCourier.transition(applicationProgress,message.id,message.status,message.detail);
+    await chrome.storage.local.set({applicationProgress:next});
+    return next;
+  };
+  const task=courierQueue.then(execute);
+  courierQueue=task.catch(()=>{});
+  task.then(reply,error=>reply({error:error.message}));
+  return true;
+});
 let profileWriteQueue=Promise.resolve();
 chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
 chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});

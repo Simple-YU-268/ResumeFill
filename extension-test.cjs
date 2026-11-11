@@ -66,6 +66,16 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await options.evaluate(async()=>{const {resume}=await chrome.storage.local.get('resume');resume.basics.gender='';await chrome.storage.local.set({resume});});
   await popup.locator('#scan').click();await popup.locator('#summary').filter({hasText:'17 个字段'}).waitFor();
   assert.equal(await popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true}).inputValue(),'basics.gender');
+  const queue=await popup.evaluate(async()=>{
+    const call=message=>chrome.runtime.sendMessage({type:'RF_RUN_COURIER',...message});
+    const before=await call({action:'list'});
+    const added=await call({action:'enqueue',job:{id:'synthetic-run',companyKey:'synthetic-company',origin:'https://jobs.example.test'}});
+    const duplicate=await call({action:'enqueue',job:{id:'synthetic-run',companyKey:'synthetic-company',origin:'https://jobs.example.test'}});
+    return {before,added,duplicate};
+  });
+  assert.deepEqual(queue.before,[]);
+  assert.equal(queue.added[0].status,'queued');
+  assert.ok(queue.duplicate.error);
   assert.match(await popup.locator('.row').filter({has:popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true})}).innerText(),/已匹配/);
   // 0.16 UX: options show human labels with the raw path on the secondary title; unresolved rows sort first.
   assert.equal(await popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true}).locator('option[value="basics.gender"]').innerText(),'基本信息 · 性别');

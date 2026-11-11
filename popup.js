@@ -118,6 +118,65 @@ async function run(fn) {
   }
 }
 let fillProgressId = null;
+const courierPanel = document.createElement("details");
+const courierTitle = document.createElement("summary");
+courierTitle.textContent = "投递任务";
+const companyInput = document.createElement("input");
+companyInput.placeholder = "公司名称";
+companyInput.setAttribute("aria-label","投递任务公司名称");
+const courierStatus = document.createElement("p");
+courierStatus.setAttribute("role","status");
+const courierList = document.createElement("div");
+courierPanel.append(courierTitle,companyInput,courierStatus,courierList);
+$("resultCard").before(courierPanel);
+let currentApplication;
+async function courier(action,extra={}) {
+  const result=await chrome.runtime.sendMessage({type:"RF_RUN_COURIER",action,...extra});
+  if(result?.error)throw Error(result.error);
+  return result;
+}
+async function refreshCourier() {
+  courierList.replaceChildren();
+  for(const run of await courier("list")) {
+    const line=document.createElement("p");
+    const states={queued:"待填写",running:"填写中",handoff:"等待手动提交",blocked:"受阻",failed:"失败",submitted:"已确认投递",skipped:"已跳过"};
+    line.textContent=run.origin+" · "+states[run.status];
+    if(run.status==="queued"||run.status==="handoff") {
+      const choose=document.createElement("button");
+      choose.textContent=run.status==="queued"?"使用此任务":"我已在网页提交";
+      choose.onclick=async()=>{
+        try {
+          if(!snapshot||new URL(snapshot.url).origin!==run.origin)throw Error("请先扫描任务对应网站");
+          if(run.status==="handoff")await courier("transition",{id:run.id,status:"submitted",detail:{confirmedByUser:true}});
+          else currentApplication=run.id;
+          courierStatus.textContent=run.status==="handoff"?"已记录用户确认":"任务已选中";
+          await refreshCourier();
+        }catch(error){courierStatus.textContent=error.message;}
+      };
+      line.append(choose);
+    }
+    courierList.append(line);
+  }
+}
+const enqueueApplication=document.createElement("button");
+enqueueApplication.textContent="加入任务";
+enqueueApplication.onclick=async()=>{
+  try {
+    if(!snapshot)throw Error("请先扫描当前表单");
+    const company=companyInput.value.normalize("NFKC").trim().toLowerCase();
+    if(!company)throw Error("请填写公司名称");
+    const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(company));
+    const companyKey=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,"0")).join("");
+    const id=crypto.randomUUID();
+    await courier("enqueue",{job:{id,companyKey,origin:new URL(snapshot.url).origin}});
+    currentApplication=id;
+    companyInput.value="";
+    courierStatus.textContent="任务已加入";
+    await refreshCourier();
+  }catch(error){courierStatus.textContent=error.message;}
+};
+courierPanel.append(enqueueApplication);
+courierPanel.addEventListener("toggle",()=>{if(courierPanel.open)refreshCourier().catch(error=>{courierStatus.textContent=error.message;});});
 const attachResume = document.createElement("button");
 attachResume.type = "button";
 attachResume.textContent = "选择已导入的 PDF";
@@ -211,13 +270,31 @@ async function send(message) {
     message = { ...message, progressId: crypto.randomUUID() };
     fillProgressId = message.progressId;
   }
+  let applicationId;
+  if(message.type==="RF_FILL"&&currentApplication) {
+    const run=(await courier("list")).find(row=>row.id===currentApplication);
+    if(!run||run.origin!==new URL(snapshot.url).origin)throw Error("投递任务与当前网站不一致");
+    await courier("transition",{id:run.id,status:"running"});
+    applicationId=run.id;
+  }
   try {
     const result = await (message.type === "RF_SCAN"
       ? ResumePageBridge.scan(tabId, message)
       : ResumePageBridge.send(tabId, message));
     if (result?.error) throw Error(result.error);
+    if(applicationId) {
+      const verified=(result.results||[]).filter(row=>row.status==="verified").length;
+      const failed=(result.results||[]).length-verified;
+      await courier("transition",{id:applicationId,status:failed?"blocked":"handoff",detail:{verified,failed}});
+      currentApplication=null;
+      await refreshCourier();
+    }
     return result;
   } catch (e) {
+    if(applicationId) {
+      await courier("transition",{id:applicationId,status:"failed"}).catch(()=>{});
+      currentApplication=null;
+    }
     if (e.code === "RF_PAGE_RUNTIME_STALE") clearPage();
     throw e;
   } finally {
