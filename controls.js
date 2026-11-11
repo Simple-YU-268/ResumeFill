@@ -231,8 +231,16 @@
           ? win.HTMLTextAreaElement.prototype
           : win.HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
-    el.dispatchEvent(new win.Event("input", { bubbles: true, composed: true }));
-    el.dispatchEvent(new win.Event("change", { bubbles: true }));
+    let event;
+    try {
+      event = new win.InputEvent("input", {
+        bubbles: true, composed: true, inputType: "insertText", data: String(value),
+      });
+    } catch {
+      event = new win.Event("input", { bubbles: true, composed: true });
+    }
+    el.dispatchEvent(event);
+    el.dispatchEvent(new win.Event("change", { bubbles: true, composed: true }));
   }
   function options(d, selector) {
     const menu = associatedMenu(d);
@@ -1256,8 +1264,9 @@
     } else if (d.type === "contenteditable") {
       d.el.textContent = String(value);
       d.el.dispatchEvent(
-        new InputEvent("input", {
+        new d.el.ownerDocument.defaultView.InputEvent("input", {
           bubbles: true,
+          composed: true,
           inputType: "insertText",
           data: String(value),
         }),

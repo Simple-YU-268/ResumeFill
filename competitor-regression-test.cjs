@@ -54,6 +54,27 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   assert.equal(result.results[1].status,duplicate?'stale':'verified');
   assert.deepEqual(await page.locator('[name=email]').evaluateAll(nodes=>nodes.map(n=>n.value)),duplicate?['','']:['candidate@example.test']);
  }
+ await page.setContent('<div id="controlled"></div>');
+ const events=await page.evaluate(async()=>{
+  const host=document.querySelector('#controlled'),shadow=host.attachShadow({mode:'open'});
+  shadow.innerHTML='<label>邮箱<input></label>';
+  const input=shadow.querySelector('input'),events=[];
+  Object.defineProperty(input,'value',{get(){return this.getAttribute('tracked')||'';},set(value){this.setAttribute('tracked',value);}});
+  host.addEventListener('input',event=>events.push([event.type,event instanceof InputEvent,event.inputType]));
+  host.addEventListener('change',event=>events.push([event.type,event.composed]));
+  await ResumeControls.fill({el:input,type:'input',scope:shadow,config:{}},'candidate@example.test',true);
+  return {events,native:Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').get.call(input)};
+ });
+ assert.deepEqual(events,{events:[['input',true,'insertText'],['change',true]],native:'candidate@example.test'});
+ assert.equal(await page.evaluate(async()=>{
+  const shadow=document.querySelector('#controlled').shadowRoot;
+  shadow.innerHTML='<div contenteditable="true"></div>';
+  const el=shadow.firstChild;
+  let received=false;
+  document.querySelector('#controlled').addEventListener('input',event=>{received=event instanceof InputEvent&&event.composed;},{once:true});
+  await ResumeControls.fill({el,type:'contenteditable',scope:shadow,config:{}},'Synthetic content',true);
+  return received;
+ }),true);
  // Render only a window into an indexed list. Duplicate matches can be off-screen.
  async function virtual(mode){await page.setContent('<input role="combobox" id="trigger" aria-controls="virtual" readonly><div id="virtual" role="listbox" style="display:none;height:100px;width:200px;overflow-y:auto;position:relative"><div id="space" style="height:400px;position:relative"></div></div>');await page.evaluate(mode=>{const input=document.querySelector('#trigger'),menu=document.querySelector('#virtual'),space=document.querySelector('#space');window.clicked=[];const names=Array.from({length:20},(_,i)=>'候选'+i);names[16]='目标';if(mode==='duplicate')names[2]='目标';window.testValue=mode==='numeric'?'3年':'目标';if(mode==='numeric'){names[2]='1-3年';names[16]='3-5年';}const render=()=>{space.replaceChildren();let first=Math.floor(menu.scrollTop/20);if(mode==='gap')first+=1;for(let i=first;i<Math.min(first+5,20);i++){const o=document.createElement('div');o.setAttribute('role','option');o.setAttribute('aria-posinset',String(i+1));o.setAttribute('aria-setsize','20');o.textContent=names[i];o.style.cssText='position:absolute;height:20px;top:'+i*20+'px';o.onclick=()=>{clicked.push(i);input.value=names[i];};space.append(o);}};menu.onscroll=render;input.onclick=()=>{menu.style.display='block';render();};window.abort=new AbortController();if(mode==='cancel')menu.addEventListener('scroll',()=>abort.abort(),{once:true});},mode);
  return await page.evaluate(async()=>{const d={el:document.querySelector('#trigger'),scope:document,type:'combobox',config:{},field:{label:'工作年限'},signal:abort.signal};try{await ResumeControls.fill(d,testValue,true);return {status:(await ResumeControls.verify(d,testValue)).status,clicked};}catch(e){return {error:e.message,clicked};}});}
