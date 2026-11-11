@@ -1371,7 +1371,8 @@
       return {...next, field:{...next.field,id:d.field.id}};
     }
     const results = [],
-      touched = new Map();
+      touched = new Map(),
+      originals = new Map();
     for (const item of message.items) {
       try {
         chrome.runtime
@@ -1419,6 +1420,7 @@
         continue;
       }
       try {
+        if (!item.verifyOnly) originals.set(item.id, C.read(d));
         const r = item.verifyOnly
           ? await C.verify(d, item.value)
           : await C.fill(d, item.value, message.overwrite);
@@ -1443,12 +1445,38 @@
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
+    const previousRegistry = registry, previousRevision = revision;
+    let live = new Map();
+    try {
+      scan();
+      live = new Map([...registry.values()].map(entry => [entry.el, entry]));
+    } finally {
+      registry = previousRegistry;
+      revision = previousRevision;
+    }
     for (const item of message.items) {
       const result = results.find((r) => r.id === item.id),
         d = registry.get(item.id);
       if (result?.status === "filled") {
         try {
-          Object.assign(result, await C.verify(d, item.value));
+          const refreshed = d.config.layuiSelect ? await C.verify(d, item.value) : null;
+          const current = live.get(d.el);
+          if (!current || rebindKey(current) !== rebindKey(d)) {
+            let restored = false;
+            if (current && d.type === "input" && current.type === "input" &&
+                !d.config.datePanel && !d.config.referencePicker &&
+                ResumeMatcher.decide(current.field, {}).action !== "block" &&
+                C.read(current) === String(item.value) &&
+                originals.has(item.id) && !operationController.signal.aborted) {
+              await C.fill(current, originals.get(item.id), true);
+              restored = (await C.verify(current, originals.get(item.id))).status === "verified";
+            }
+            Object.assign(result, {status:"stale",error:restored ?
+              "字段语义已变化，已恢复原值，请重新核对" :
+              "字段语义已变化，请重新核对；未恢复当前内容"});
+            continue;
+          }
+          Object.assign(result, refreshed || await C.verify(d, item.value));
         } catch (e) {
           Object.assign(result, { status: "unconfirmed", error: e.message });
         }
