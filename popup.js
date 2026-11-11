@@ -399,12 +399,15 @@ async function scan(incremental = false, learning = false) {
   $("resultCard").hidden = true;
   $("resultCard").replaceChildren();
   for (const field of snapshot.fields) {
+    const decision = ResumeMatcher.decide(field, values);
     const savedAnswer = ResumeAnswers.match(field, resume, snapshot);
     const guess =
       savedAnswer ||
       (field.path
         ? { path: field.path }
-        : ResumeMatcher.match(field, values) || ResumeMatcher.infer(field));
+        : decision.action === "fill"
+          ? { path: decision.sourcePath, score: decision.confidence >= .98 ? 100 : 78 }
+          : null);
     if (guess?.path && !Object.hasOwn(values, guess.path))
       values[guess.path] = "";
     const old =
@@ -417,7 +420,7 @@ async function scan(incremental = false, learning = false) {
       old.section === field.section &&
       old.index === field.recordIndex;
     const key = ruleField(field),
-      chosen = same
+      chosen = decision.action === "block" ? "" : same
         ? old.path
         : Object.hasOwn(rules, key)
           ? rules[key]
@@ -438,6 +441,8 @@ async function scan(incremental = false, learning = false) {
       .filter(Boolean)
       .join(" · ");
     left.append(small);
+    const matchStatus = document.createElement("small");
+    left.append(matchStatus);
     const right = document.createElement("div"),
       select = document.createElement("select");
     select.setAttribute("aria-label", field.label + " 对应简历字段");
@@ -459,6 +464,7 @@ async function scan(incremental = false, learning = false) {
       select.append(option);
     }
     select.value = chosen;
+    if (decision.action === "block") select.disabled = true;
     const preview = document.createElement("input");
     preview.readOnly = true;
     preview.setAttribute("aria-label", "填充值预览");
@@ -487,8 +493,10 @@ async function scan(incremental = false, learning = false) {
       row,
     };
     const update = () => {
+      matchStatus.textContent = decision.action === "block" ? "已阻止" : select.value ? "已匹配" :
+        decision.action === "review" ? "待核对" : "未匹配";
       preview.value = values[select.value] || "";
-      draft.hidden = !!preview.value || ResumeAnswers.protectedField(field);
+      draft.hidden = !!preview.value || decision.action === "block" || ResumeAnswers.protectedField(field);
       draft.placeholder = select.value
         ? `已识别 ${pathLabel(select.value)}，尚无资料；请补充或检查桌面资料更新`
         : field.ambiguousLabel

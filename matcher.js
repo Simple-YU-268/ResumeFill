@@ -262,7 +262,10 @@
     if(field.ambiguousLabel||field.contextBlocked||field.workBindingRequired||field.familyAmbiguous)return result('review','字段归属需要核对');
     field=resolveField(field,values);
     if(!field||recordSections.includes(field.section)&&!Number.isInteger(field.recordIndex))return result('review','经历记录尚未绑定');
-    const eligible=path=>allowedPath(field,path)&&Object.hasOwn(values,path)&&String(values[path]??'').trim();
+    const eligible=path=>(allowedPath(field,path)||
+      field.section==='basics'&&!isFamilyField(field)&&!foreignPerson(field)&&
+      path.startsWith('custom.')&&normalize(path.slice(7))===normalize(field.label))&&
+      Object.hasOwn(values,path)&&String(values[path]??'').trim();
     const expected=path=>({ 'basics.email':'email','basics.phone':'phone','basics.website':'url' })[path];
     const conflict=path=>expected(path)&&['email','phone','url','number','integer','date','month','year'].includes(field.valueType)&&expected(path)!==field.valueType;
     const exact=infer(field), matched=match(field,values);

@@ -66,6 +66,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await options.evaluate(async()=>{const {resume}=await chrome.storage.local.get('resume');resume.basics.gender='';await chrome.storage.local.set({resume});});
   await popup.locator('#scan').click();await popup.locator('#summary').filter({hasText:'17 个字段'}).waitFor();
   assert.equal(await popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true}).inputValue(),'basics.gender');
+  assert.match(await popup.locator('.row').filter({has:popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true})}).innerText(),/已匹配/);
   // 0.16 UX: options show human labels with the raw path on the secondary title; unresolved rows sort first.
   assert.equal(await popup.getByRole('combobox',{name:'性别 对应简历字段',exact:true}).locator('option[value="basics.gender"]').innerText(),'基本信息 · 性别');
   assert.ok((await popup.locator('#fields .row').first().innerText()).includes('性别'),'unresolved field must sort to the top');
