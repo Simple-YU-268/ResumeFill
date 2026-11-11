@@ -122,6 +122,24 @@ const attachResume = document.createElement("button");
 attachResume.type = "button";
 attachResume.textContent = "选择已导入的 PDF";
 $("resultCard").before(attachResume);
+const checkForm = document.createElement("button");
+checkForm.type = "button";
+checkForm.textContent = "提交前检查";
+attachResume.after(checkForm);
+checkForm.onclick = async () => {
+  checkForm.disabled = true;
+  try {
+    const { issues, candidates } = await send({ type: "RF_RUN_PREFLIGHT" });
+    $("status").textContent = [
+      issues.length ? issues.map(({code,label}) => label + (code === "invalid" ? "：格式无效" : "：必填未填")).join("；") : "未发现可见字段的必填或格式问题",
+      candidates.length ? "请在网页核对：" + candidates.join("、") : "请在网页核对提交位置",
+    ].join("。");
+  } catch (error) {
+    $("status").textContent = error.message;
+  } finally {
+    checkForm.disabled = false;
+  }
+};
 let attachmentApproval;
 attachResume.onclick = async () => {
   attachResume.disabled = true;
@@ -162,7 +180,7 @@ async function send(message) {
     throw Error("Agent 正在操作页面，请先停止或等待");
   if (agentNeedsRescan && !["RF_SCAN", "RF_CANCEL"].includes(message.type))
     throw Error("Agent 已更新扫描，请先重新扫描页面");
-  if (["RF_FILL", "RF_PREPARE", "RF_RUN_UPLOAD"].includes(message.type)) {
+  if (["RF_FILL", "RF_PREPARE", "RF_RUN_UPLOAD", "RF_RUN_PREFLIGHT"].includes(message.type)) {
     try {
       const [active] = await chrome.tabs.query({
         active: true,

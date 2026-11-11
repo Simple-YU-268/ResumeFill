@@ -1554,6 +1554,31 @@
     },
   };
   let pendingAttachment;
+  function preflight() {
+    if (!scannedUrl || scannedUrl !== location.href) throw Error("请重新扫描当前表单");
+    const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
+    const collect = selector => [...new Set(roots.flatMap(root => shown(root, selector)))];
+    const entries = new Map([...registry.values()].map(item => [item.el,item]));
+    const issues = [];
+    for (const el of new Set([...collect('input,textarea,select,[aria-required="true"]'),
+      ...[...entries.keys()].filter(el => roots.some(root => ResumeLayout.contains(root,el)) && ResumeLayout.visible(el))])) {
+      if (el.matches(':disabled,[aria-disabled="true"],[type="hidden"]')) continue;
+      const entry = entries.get(el);
+      const label = (entry?.field.label || el.getAttribute('aria-label') || text(el.labels?.[0]) || '未命名字段').slice(0,100);
+      const empty = el.type === 'file' ? !el.files.length :
+        ['radio','checkbox'].includes(el.type) ? !el.checked && (el.type !== 'radio' || el.validity?.valueMissing) :
+        !String(entry ? C.read(entry) : el.value ?? '').trim();
+      if ((el.required || el.getAttribute('aria-required') === 'true' || entry?.field.required) && empty)
+        issues.push({code:'required-empty',label});
+      else if (el.validity?.valid === false || el.getAttribute('aria-invalid') === 'true')
+        issues.push({code:'invalid',label});
+    }
+    const candidates = collect('button,input[type="submit"],input[type="button"]')
+      .filter(el => !el.matches(':disabled,[aria-disabled="true"]'))
+      .map(el => (el.getAttribute('aria-label') || text(el) || (el.tagName === 'INPUT' ? el.value : '')).slice(0,100))
+      .filter(label => /submit|apply|send|提交|投递|申请|发送/i.test(label)).slice(0,5);
+    return {issues,candidates};
+  }
   function resumeAttachment(message) {
     if (!scannedUrl || location.href !== scannedUrl) throw Error("请重新扫描当前表单");
     const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
@@ -1599,6 +1624,7 @@
         "RF_SCOPE_SET",
         "RF_SCAN",
         "RF_RUN_UPLOAD",
+        "RF_RUN_PREFLIGHT",
         "RF_LEARN_READ",
         "RF_FILL",
         "RF_VERIFY",
@@ -1616,6 +1642,7 @@
     busy = true;
     pendingOperation = (async () => {
       if (message.type === "RF_RUN_UPLOAD") return resumeAttachment(message);
+      if (message.type === "RF_RUN_PREFLIGHT") return preflight();
       if (message.type === "RF_SCOPE_LIST") return { scopes: scopeList() };
       if (message.type === "RF_SCOPE_SET") return chooseScope(message);
       if (message.type === "RF_OCR_CONTEXT") return ocrContext();
