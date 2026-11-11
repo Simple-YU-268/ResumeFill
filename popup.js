@@ -155,6 +155,24 @@ async function refreshCourier() {
       };
       line.append(choose);
     }
+    const command=(label,action,extra)=>{
+      const button=document.createElement("button");
+      button.type="button";
+      button.textContent=label;
+      button.onclick=async()=>{
+        button.disabled=true;
+        try {
+          await courier(action,{id:run.id,...extra});
+          if(currentApplication===run.id)currentApplication=null;
+          await refreshCourier();
+          courierStatus.textContent="任务已更新";
+        } catch(error){courierStatus.textContent=error.message;button.disabled=false;}
+      };
+      line.append(button);
+    };
+    if(["blocked","failed"].includes(run.status))command("重新排队","transition",{status:"queued"});
+    if(run.status==="running")command("恢复中断任务","recover",{});
+    if(["queued","handoff","blocked","failed"].includes(run.status))command("跳过","transition",{status:"skipped"});
     courierList.append(line);
   }
 }
@@ -176,6 +194,21 @@ enqueueApplication.onclick=async()=>{
   }catch(error){courierStatus.textContent=error.message;}
 };
 courierPanel.append(enqueueApplication);
+const exportApplications=document.createElement("button");
+exportApplications.type="button";
+exportApplications.textContent="导出任务回执";
+exportApplications.onclick=async()=>{
+  try {
+    const receipt=await courier("export");
+    const url=URL.createObjectURL(new Blob([JSON.stringify(receipt,null,2)],{type:"application/json"}));
+    const link=document.createElement("a");
+    link.href=url;
+    link.download="application-progress.json";
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(error){courierStatus.textContent=error.message;}
+};
+courierPanel.append(exportApplications);
 courierPanel.addEventListener("toggle",()=>{if(courierPanel.open)refreshCourier().catch(error=>{courierStatus.textContent=error.message;});});
 const attachResume = document.createElement("button");
 attachResume.type = "button";
@@ -189,8 +222,10 @@ checkForm.onclick = async () => {
   checkForm.disabled = true;
   try {
     const { issues, candidates } = await send({ type: "RF_RUN_PREFLIGHT" });
+    const reasons = {'invalid':'格式无效','required-empty':'必填未填','challenge':'请人工完成',
+      'semantic-drift':'字段语义已变化','unconfirmed':'填写未确认','readback-changed':'填写后内容已变化'};
     $("status").textContent = [
-      issues.length ? issues.map(({code,label}) => label + (code === "invalid" ? "：格式无效" : "：必填未填")).join("；") : "未发现可见字段的必填或格式问题",
+      issues.length ? issues.map(({code,label}) => label + "：" + (reasons[code] || "请核对")).join("；") : "未发现当前可见表单的检查问题",
       candidates.length ? "请在网页核对：" + candidates.join("、") : "请在网页核对提交位置",
     ].join("。");
   } catch (error) {
@@ -476,7 +511,7 @@ async function scan(incremental = false, learning = false) {
   $("resultCard").hidden = true;
   $("resultCard").replaceChildren();
   for (const field of snapshot.fields) {
-    const decision = ResumeMatcher.decide(field, values);
+    const decision = ResumeMatcher.decide(field, values, resume.autoFill);
     const savedAnswer = ResumeAnswers.match(field, resume, snapshot);
     const guess =
       savedAnswer ||
@@ -496,12 +531,13 @@ async function scan(incremental = false, learning = false) {
       old.label === field.label &&
       old.section === field.section &&
       old.index === field.recordIndex;
-    const key = ruleField(field),
-      chosen = decision.action === "block" ? "" : same
+    const key = ruleField(field);
+    let chosen = decision.action === "block" ? "" : same
         ? old.path
         : Object.hasOwn(rules, key)
           ? rules[key]
           : guess?.path || "";
+    if (ResumeMatcher.fieldPolicy(resume,chosen) === 'review' && !(same && old.touched)) chosen = "";
     const row = document.createElement("div");
     row.className = "row";
     const left = document.createElement("div");
@@ -554,9 +590,9 @@ async function scan(incremental = false, learning = false) {
       select,
       key,
       small,
-      aiLocked: same
+      aiLocked: decision.reason === '资料策略要求逐项核对' || (same
         ? old.aiLocked
-        : !!savedAnswer || !!field.path || Object.hasOwn(rules, key),
+        : !!savedAnswer || !!field.path || Object.hasOwn(rules, key)),
       touched: !!(same && old.touched),
       aiReview: same
         ? old.aiReview
@@ -1021,6 +1057,8 @@ $("fill").onclick = () =>
               `${s.section} 第 ${s.index + 1} 条：${s.status === "save_indicator_observed" ? "已观察到页面保存标识" : s.error}`,
           )
           .join("\n") +
+        (response.adaptation?.requiresReview ? "\n发现新增字段 "+response.adaptation.newFields.length+" 项，请扫描新增字段并核对。" : "") +
+        (response.adaptation?.timedOut ? "\n页面仍在变化，请稍后重扫。" : "") +
         "\n请核对网页；未检查其他分页或服务器保存状态。",
     );
   });
@@ -1330,6 +1368,7 @@ function applyAISuggestions(matches, automatic = false) {
       r &&
       ResumeAI.reviewable(r, values) &&
       ResumeMatcher.allowedPath(r.field, m.path) &&
+      (!automatic || ResumeMatcher.fieldPolicy(resume,m.path) === 'auto') &&
       values[m.path]
     ) {
       r.select.value = m.path;

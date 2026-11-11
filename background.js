@@ -5,11 +5,13 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   if(message.type!=='RF_RUN_COURIER')return;
   if(!sender.url?.startsWith(chrome.runtime.getURL(''))){reply({error:'Invalid source'});return;}
   const execute=async()=>{
-    const {applicationProgress=[]}=await chrome.storage.local.get('applicationProgress');
+    const {applicationProgress=[],applicationProgressRevision=0}=await chrome.storage.local.get(['applicationProgress','applicationProgressRevision']);
     if(message.action==='list')return applicationProgress;
+    if(message.action==='export')return ResumeCourier.receipts(applicationProgress);
     const next=message.action==='enqueue'?ResumeCourier.enqueue(applicationProgress,message.job):
+      message.action==='recover'?ResumeCourier.recover(applicationProgress,message.id):
       ResumeCourier.transition(applicationProgress,message.id,message.status,message.detail);
-    await chrome.storage.local.set({applicationProgress:next});
+    await chrome.storage.local.set({applicationProgress:next,applicationProgressRevision:applicationProgressRevision+1});
     return next;
   };
   const task=courierQueue.then(execute);

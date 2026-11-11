@@ -3,3 +3,4 @@
 .pdf-mode{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:14px 0;color:#587469;font-size:13px}.pdf-mode select{padding:8px;border:1px solid var(--control);border-radius:var(--r-sm);color:inherit;background:white}
 
 .profile-nested > input[type="date"],.profile-nested > input[type="month"],.profile-nested > input[type="number"],.profile-nested > select{display:block;width:100%;margin:8px 0;padding:10px;border:1px solid var(--border);border-radius:var(--r-sm);background:white;color:var(--text)}.profile-nested select{max-width:100%}
+.profile-policy-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,1fr);gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}.profile-policy-row span{overflow-wrap:anywhere}.profile-policy-row select{width:100%}@media(max-width:600px){.profile-policy-row{grid-template-columns:minmax(0,1fr)}}

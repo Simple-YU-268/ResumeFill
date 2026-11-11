@@ -12,6 +12,13 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  assert.equal(emailSignal.labelProvenance,'dt-dd');
  assert.equal(emailSignal.visible,true);
  assert.equal(emailSignal.component,'native');
+ await page.setContent('<label>电话<input aria-label="邮箱" name="contact"></label><span id="school-label">毕业院校</span><label>其他<input aria-labelledby="school-label"></label>');
+ const ariaScan=await page.evaluate(()=>new Promise(resolve=>listener({type:'RF_SCAN'}, {}, resolve)));
+ assert.deepEqual(ariaScan.fields.map(f=>[f.label,f.labelProvenance]),[['邮箱','aria-label'],['毕业院校','aria-labelledby']]);
+ assert.equal(ariaScan.fields[0].identity.label,'邮箱');
+ assert.equal(ariaScan.fields[0].identity.name,'contact');
+ assert.match(ariaScan.fields[0].fingerprint,/^[a-f0-9]+$/);
+ assert.equal(ariaScan.fields[0].risk,'normal');
  // A reused visible portal has no ARIA link and existed before the click.
  await page.setContent('<input role="combobox" id="trigger" readonly><div role="listbox" id="menu"><div role="option">旧候选</div></div><div role="listbox" style="margin-top:200px"><div role="option">目标</div></div>');
  await page.evaluate(()=>{const input=document.querySelector('#trigger'),menu=document.querySelector('#menu');input.onclick=()=>{menu.replaceChildren();for(const text of ['目标','其他']){const o=document.createElement('div');o.setAttribute('role','option');o.textContent=text;o.onclick=()=>{input.value=text;};menu.append(o);}};});
@@ -31,6 +38,14 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  assert.deepEqual(await call({...upload,token:fresh.token}),{selected:true});
  assert.deepEqual(await page.locator('input[type=file]').evaluate(async el=>[await el.files[0].text(),window.submissions]),[pdf.toString(),0]);
  assert.ok((await call({type:'RF_RUN_UPLOAD'})).error);
+ await page.setContent('<form><label>个人简历<input type="file" accept=".pdf" hidden></label></form>');
+ await call({type:'RF_SCAN'});
+ const hiddenFile=await call({type:'RF_RUN_UPLOAD'});
+ assert.ok(hiddenFile.token,hiddenFile.error);
+ assert.deepEqual(await call({...upload,token:hiddenFile.token}),{selected:true});
+ await page.setContent('<form hidden><label>个人简历<input type="file" accept=".pdf"></label></form>');
+ await call({type:'RF_SCAN'});
+ assert.ok((await call({type:'RF_RUN_UPLOAD'})).error);
  await page.setContent('<form><label>Email<input type="email" required></label><input hidden required><button type="submit">Apply</button></form>');
  await page.evaluate(()=>{window.submissions=0;document.querySelector('form').onsubmit=e=>{e.preventDefault();window.submissions++;};});
  await call({type:'RF_SCAN'});
@@ -43,6 +58,13 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  await page.locator('input[type=email]').fill('candidate@example.test');
  assert.deepEqual((await call({type:'RF_RUN_PREFLIGHT'})).issues,[]);
  assert.equal(await page.evaluate(()=>window.submissions),0);
+ await page.setContent('<form><label>邮箱<input type="email"></label><label>验证码<input autocomplete="one-time-code"></label><div class="captcha" hidden>hidden</div><button>Apply</button></form>');
+ let checkedFields=(await call({type:'RF_SCAN'})).fields;
+ await call({type:'RF_FILL',items:[{id:checkedFields.find(f=>f.label==='邮箱').id,value:'candidate@example.test'}]});
+ assert.deepEqual((await call({type:'RF_RUN_PREFLIGHT'})).issues.map(i=>i.code),['challenge']);
+ await page.locator('input[type=email]').fill('changed@example.test');
+ assert.deepEqual((await call({type:'RF_RUN_PREFLIGHT'})).issues.map(i=>i.code).sort(),['challenge','readback-changed']);
+ assert.equal((await call({type:'RF_RUN_PREFLIGHT'})).submissionVerified,false);
  for(const duplicate of [false,true]){
   await page.setContent('<form><label>姓名<input id="first"></label><label>邮箱<input name="email"></label></form>');
   await page.evaluate(duplicate=>document.querySelector('#first').addEventListener('input',()=>{
@@ -54,6 +76,29 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   assert.equal(result.results[1].status,duplicate?'stale':'verified');
   assert.deepEqual(await page.locator('[name=email]').evaluateAll(nodes=>nodes.map(n=>n.value)),duplicate?['','']:['candidate@example.test']);
  }
+ await page.setContent('<form><label>姓名<input id="reveal"></label></form>');
+ await page.evaluate(()=>{
+  const Native=window.MutationObserver;
+  window.watches={opened:0,closed:0,body:0};
+  window.MutationObserver=class extends Native{
+   observe(root,options){window.watches.opened++;if(root===document.body||root===document)window.watches.body++;return super.observe(root,options);}
+   disconnect(){window.watches.closed++;return super.disconnect();}
+  };
+  document.querySelector('input').addEventListener('input',()=>setTimeout(()=>{
+   const label=document.createElement('label');label.textContent='邮箱';
+   const input=document.createElement('input');input.type='email';label.append(input);
+   document.querySelector('form').append(label);
+  },100),{once:true});
+ });
+ const adaptiveScan=await call({type:'RF_SCAN'});
+ const adaptiveFill=await call({type:'RF_FILL',items:[{id:adaptiveScan.fields[0].id,value:'Synthetic'}]});
+ assert.deepEqual(adaptiveFill.adaptation.newFields.map(f=>f.label),['邮箱']);
+ assert.equal(adaptiveFill.adaptation.requiresReview,true);
+ assert.equal(await page.locator('[type=email]').inputValue(),'');
+ const watches=await page.evaluate(()=>window.watches);
+ assert.ok(watches.opened>0);
+ assert.equal(watches.opened,watches.closed);
+ assert.equal(watches.body,0);
  await page.setContent('<div id="controlled"></div>');
  const events=await page.evaluate(async()=>{
   const host=document.querySelector('#controlled'),shadow=host.attachShadow({mode:'open'});

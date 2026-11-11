@@ -37,6 +37,7 @@ fs.cpSync(path.join(source, "data"), path.join(extension, "data"), {
   recursive: true,
 });
 for (const f of [
+  "courier.js",
   "ai.js",
   "agent-recovery.js",
   "matcher.js",

@@ -11,7 +11,7 @@
   function walk(target,source,path){
    if(empty(source)||signature(target)===signature(source))return;
    // Records are atomic groups: array position does not establish identity.
-   const atomic=Array.isArray(source)||object(source)&&(!empty(target)&&!object(target)||['hukou','nativeRegion','currentResidence'].includes(path.at(-1)));
+   const atomic=Array.isArray(source)||object(source)&&(!empty(target)&&!object(target)||['hukou','nativeRegion','currentResidence','autoFill'].includes(path.at(-1)));
    if(object(source)&&!atomic){for(const [key,value]of Object.entries(source))if(valid(key)&&!(path.length===0&&key==='fieldAnswers'))walk(object(target)?target[key]:undefined,value,[...path,key]);return;}
    if(!path.length)return;
    items.push({path,previous:target===undefined?null:clone(target),value:clone(source),missing:empty(target),group:atomic,sensitive:atomic||sensitive(path),checked:empty(target)&&!atomic&&!sensitive(path)});

@@ -5,6 +5,14 @@ async function loadModel(){const m=await window.rf.model();modelDirty=false;$('e
 const pdfImport=new PDFImport($('pdfImport'),profileEditor,notice);
 const resumeAttachmentActions=document.createElement('div');
 resumeAttachmentActions.className='buttons';
+const resumeAttachmentInfo=document.createElement('p');
+resumeAttachmentInfo.id='resumeAttachmentInfo';
+resumeAttachmentInfo.setAttribute('role','status');
+function renderResumeAttachment(metadata){
+ resumeAttachmentInfo.textContent=metadata ? '投递用 PDF：'+metadata.fileName+' · '+Math.ceil(metadata.size/1024)+' KB' : '尚未导入投递用 PDF';
+}
+renderResumeAttachment(null);
+window.rf.resumeAttachmentMetadata?.().then(renderResumeAttachment).catch(error=>notice(error.message,true));
 for(const [label,action] of [['导入投递用 PDF','chooseResumeAttachment'],['移除投递用 PDF','removeResumeAttachment']]){
  const control=document.createElement('button');
  control.type='button';
@@ -13,14 +21,51 @@ for(const [label,action] of [['导入投递用 PDF','chooseResumeAttachment'],['
   for(const item of resumeAttachmentActions.children)item.disabled=true;
   try{
    const result=await window.rf[action]();
-   if(action==='removeResumeAttachment')notice('已移除投递用 PDF');
-   else if(result)notice('已导入：'+result.fileName);
+   if(action==='removeResumeAttachment'){renderResumeAttachment(null);notice('已移除投递用 PDF');}
+   else if(result){renderResumeAttachment(result);notice('已导入：'+result.fileName);}
   }catch(error){notice(error.message,true);}
   finally{for(const item of resumeAttachmentActions.children)item.disabled=false;}
  };
  resumeAttachmentActions.append(control);
 }
-$('pdfImport').after(resumeAttachmentActions);
+$('pdfImport').after(resumeAttachmentActions,resumeAttachmentInfo);
+const applicationBoard=document.createElement('div');
+applicationBoard.id='applicationBoard';
+const applicationHeading=document.createElement('h3');
+applicationHeading.textContent='投递任务';
+const applicationFilter=document.createElement('select');
+applicationFilter.setAttribute('aria-label','投递任务状态筛选');
+for(const [value,label] of [['all','全部任务'],['pending','待处理'],['finished','已结束']]){
+ const option=document.createElement('option');option.value=value;option.textContent=label;applicationFilter.append(option);
+}
+const applicationRows=document.createElement('div');
+applicationRows.setAttribute('role','list');
+applicationBoard.append(applicationHeading,applicationFilter,applicationRows);
+$('overview').append(applicationBoard);
+let applicationSnapshot=[],applicationStamp='';
+function renderApplications(){
+ const states={queued:'待填写',running:'填写中',handoff:'等待手动提交',blocked:'受阻',failed:'失败',submitted:'已确认投递',skipped:'已跳过'};
+ const finished=row=>['submitted','skipped'].includes(row.status);
+ const rows=applicationSnapshot.filter(row=>applicationFilter.value==='all'||(applicationFilter.value==='finished')===finished(row));
+ applicationRows.replaceChildren();
+ for(const row of rows){
+  const line=document.createElement('div');line.className='application-row';line.setAttribute('role','listitem');
+  for(const value of [row.origin,states[row.status]||'待核对','回读 '+row.verified+' · 未确认 '+row.failed,new Date(row.updatedAt).toLocaleString()]){
+   const cell=document.createElement('span');cell.textContent=value;line.append(cell);
+  }
+  applicationRows.append(line);
+ }
+ if(!rows.length){const empty=document.createElement('p');empty.textContent='暂无符合条件的任务';applicationRows.append(empty);}
+}
+applicationFilter.onchange=renderApplications;
+async function refreshApplications(){
+ const value=(await window.rf.status()).applications||[];
+ const stamp=JSON.stringify(value);
+ if(stamp!==applicationStamp){applicationSnapshot=value;applicationStamp=stamp;renderApplications();}
+}
+renderApplications();
+refreshApplications().catch(error=>notice(error.message,true));
+setInterval(()=>refreshApplications().catch(()=>{}),5000);
 const actions={openRelease:()=>window.rf.openRelease(),recoverCredentials:async()=>{await window.rf.recoverCredentials();await loadModel();notice('连接凭据已重建，请重新配对并填写模型密钥。');return {quiet:true};},importPDF:()=>pdfImport.open(),refresh,start:()=>window.rf.start(),stop:()=>window.rf.stop(),openData:()=>window.rf.openData(),openExtension:()=>window.rf.openExtension(),copyExtension:()=>window.rf.copyExtension(),copyPairing:async()=>{await window.rf.copyPairing();return {copyPairing:true};},oneClickUpdate:async()=>{checkUpdateEdits();await window.rf.updateOneClick();return {quiet:true};},checkUpdate:async()=>{await window.rf.updateCheck();return {quiet:true};},downloadUpdate:async()=>{await window.rf.updateDownload();return {quiet:true};},installUpdate:async()=>{checkUpdateEdits();await window.rf.updateInstall();return {quiet:true};},edge:()=>window.rf.browser('edge'),chrome:()=>window.rf.browser('chrome'),exportConnection:()=>window.rf.exportConnection(),importProfile:async()=>{const r=await window.rf.importProfile();if(r)profileEditor.load(r);},exportProfile:()=>window.rf.exportProfile(),saveProfile:async()=>{await window.rf.saveProfile(profileEditor.value());profileEditor.saved();},saveModel:async()=>{await window.rf.saveModel({enabled:$('enabled').checked,endpoint:$('endpoint').value,model:$('modelId').value,apiKey:$('apiKey').value,jsonMode:$('jsonMode').checked,thinkingMode:$('thinkingMode').value,clearKey:$('clearKey').checked});$('apiKey').value='';$('clearKey').checked=false;await loadModel();},testModel:async()=>{await actions.saveModel();return window.rf.testModel();}};
 document.addEventListener('click',async e=>{const name=e.target.closest('[data-action]')?.dataset.action;if(!name||busy)return;busy=true;const lockedFields=['oneClickUpdate','installUpdate'].includes(name)?Array.from(document.querySelectorAll('input,select,textarea')).map(el=>({el,disabled:el.disabled})):[];lockedFields.forEach(({el})=>el.disabled=true);document.querySelectorAll('button').forEach(b=>b.disabled=true);try{const result=await actions[name]();await refresh();if(!result?.quiet)notice(name==='copyExtension'?'插件路径已复制':name==='copyPairing'?'配对码已复制到剪贴板，10 分钟内有效，配对一次后失效':name==='testModel'?'真实模型调用与字段匹配验证成功（'+result.latencyMs+' ms）':'操作完成');}catch(e){notice(e.message,true);}finally{busy=false;lockedFields.forEach(({el,disabled})=>el.disabled=disabled);document.querySelectorAll('button').forEach(b=>b.disabled=false);window.rf.updateState().then(renderUpdate).catch(()=>{});}});
 function renderUpdate(u){const el=$('updateState');if(!el)return;const map={idle:'尚未检查更新',checking:'正在检查更新…',available:'发现新版本 '+(u.version||''),none:'已是最新版本',downloading:'正在下载更新 '+(u.percent||0)+'%',ready:'新版本 '+(u.version||'')+' 已就绪',installing:'正在安装并重新启动…',error:'更新失败：'+(u.message||'可重试或到发布页手动下载')};el.textContent=map[u.phase]||'';$('downloadUpdate').hidden=u.phase!=='available';$('installUpdate').hidden=u.phase!=='ready';if(['available','ready'].includes(u.phase))$('installUpdate').closest('details').open=true;for(const button of document.querySelectorAll('[data-action=oneClickUpdate],[data-action=checkUpdate],[data-action=downloadUpdate],[data-action=installUpdate]'))button.disabled=busy||!!u.busy;}

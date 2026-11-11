@@ -16,6 +16,16 @@ class Controller {
     this.webOCR = new (require("./web-ocr.cjs").WebOCR)();
     this.connections = new Map();
     this.audit = [];
+    this.applicationClients = {};
+    try {
+      const stored = JSON.parse(fs.readFileSync(path.join(directory,'application-progress.json'),'utf8'));
+      if (!stored || Object.keys(stored).length > 10) throw Error('Invalid application clients');
+      const courier = require(path.join(this.runtime,'courier.js'));
+      for (const [key,value] of Object.entries(stored)) {
+        if (!/^[a-f0-9]{64}$/.test(key)) throw Error('Invalid application client');
+        this.applicationClients[key] = courier.validateReceipts(value);
+      }
+    } catch { this.applicationClients = {}; }
     this.statistics = {
       totals: require("./statistics.cjs").empty(),
       clients: {},
@@ -215,6 +225,25 @@ class Controller {
   removeResumeAttachment() {
     fs.rmSync(path.join(this.directory, 'resume-attachment.json'), { force: true });
   }
+  resumeAttachmentMetadata() {
+    const attachment = this.resumeAttachment();
+    if (!attachment) return null;
+    const {fileName,size,mime,sha256} = attachment;
+    return {fileName,size,mime,sha256};
+  }
+  saveApplicationProgress(clientId,input) {
+    if (typeof clientId !== 'string' || !/^[-\w]{1,80}$/.test(clientId)) throw Error('Invalid application client');
+    const courier = require(path.join(this.runtime,'courier.js'));
+    const value = courier.validateReceipts(input);
+    const key = crypto.createHash('sha256').update(clientId).digest('hex');
+    const previous = this.applicationClients[key];
+    if (Number.isSafeInteger(previous?.revision) && (!Number.isSafeInteger(value.revision) || value.revision <= previous.revision)) return;
+    if (JSON.stringify(this.applicationClients[key]) === JSON.stringify(value)) return;
+    const next = {...this.applicationClients,[key]:value};
+    while (Object.keys(next).length > 10) delete next[Object.keys(next)[0]];
+    this.write(path.join(this.directory,'application-progress.json'),next);
+    this.applicationClients = next;
+  }
   profile() {
     const file = path.join(this.directory, "resume.json");
     return fs.existsSync(file)
@@ -316,6 +345,7 @@ class Controller {
             !/^[-\w]{1,80}$/.test(input.clientId)
           )
             throw Error("客户端无效");
+          if (input.applications) this.saveApplicationProgress(input.clientId,input.applications);
           if (input.metrics) {
             const key = crypto
               .createHash("sha256")
@@ -376,6 +406,8 @@ class Controller {
   }
   status() {
     return {
+      applications: Object.entries(this.applicationClients).flatMap(([clientKey,value]) =>
+        value.applications.map(row => ({...row,clientKey}))).sort((a,b) => b.updatedAt-a.updatedAt),
       statistics: this.statistics.totals,
       configRecovered: !!this.configRecovered,
       startupError: this.startupError || null,

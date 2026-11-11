@@ -16,6 +16,12 @@ const assert=require('node:assert/strict'),M=require('./matcher.js'),AI=require(
   assert.equal(decide({label:'公司名称',section:'work',recordIndex:0}).action,'skip');
   assert.equal(decide({label:'公司名称',section:'work'}).action,'review');
   assert.equal(decide({label:'邮箱',valueType:'number'}).action,'review');
+  assert.equal(decide({label:'邮箱',identity:{id:'otp'}}).action,'block');
+  assert.equal(M.decide({label:'邮箱'},values,{'basics.email':'review'}).action,'review');
+  assert.equal(M.decide({label:'邮箱'},values,{'basics.email':'never'}).action,'block');
+  const filtered=M.flatten({basics:{email:'private',birthday:'2000-01-02'},autoFill:{'basics.email':'never','basics.birthday':'never'}});
+  assert.ok(!JSON.stringify(filtered).includes('private'));
+  assert.ok(!Object.keys(filtered).some(path=>path.startsWith('autoFill')||path.includes('birthday')));
 }
 const field={label:'工作年限'};
 const options=texts=>texts.map((text,i)=>({id:'o'+i,text}));

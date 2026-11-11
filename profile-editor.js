@@ -1,9 +1,9 @@
 /* All imported labels and answers are data; never insert HTML from a profile. */
 (()=>{
-const names={...window.ResumeFieldLabels.sections,...window.ResumeFieldLabels.fields};
+const names={...window.ResumeFieldLabels.sections,...window.ResumeFieldLabels.fields,policies:'填写策略'};
 const basics=['name','gender','birthday','phone','email','city','idNumber','nationality','ethnicity','politicalStatus','maritalStatus','hukouAddress','nativePlace','address','website'];
 const recordKeys={education:['school','major','degree','startDate','endDate','gpa'],work:['employmentType','company','position','startDate','endDate','description'],projects:['name','role','startDate','endDate','description']};
-const groups=['basics','family','education','work','projects','skills','custom','fieldAnswers','other'];
+const groups=['basics','family','education','work','projects','skills','custom','fieldAnswers','policies','other'];
 const forbidden=k=>!k||/[.\[\]]/.test(k)||['__proto__','prototype','constructor'].includes(k)||k.startsWith('_');
 const isObject=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);const clone=v=>JSON.parse(JSON.stringify(v));
 function el(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;}
@@ -15,8 +15,38 @@ class Editor{
  set(path,value){let target=this.data;for(let i=0;i<path.length-1;i++){const k=path[i];if(!isObject(target[k])&&!Array.isArray(target[k]))target[k]=typeof path[i+1]==='number'?[]:{};target=target[k];}target[path.at(-1)]=value;this.changed();}
  changed(){this.dirty=true;this.onChange?.(true);const badge=this.host.querySelector('.profile-save-state');if(badge)badge.textContent='有修改尚未保存';}
  saved(){this.dirty=false;this.undo=null;this.render();}
- remove(path){let target=this.data;for(const k of path.slice(0,-1))target=target[k];this.undo={path:[...path],value:clone(target[path.at(-1)]),array:Array.isArray(target)};if(Array.isArray(target))target.splice(path.at(-1),1);else delete target[path.at(-1)];for(const key of this.errors.keys()){const p=JSON.parse(key);if(path.every((k,i)=>p[i]===k))this.errors.delete(key);}this.changed();this.render();}
+ reindexPolicies(path,index,delta,restore={}){
+  if(!isObject(this.data.autoFill))return {};
+  const prefix=path.join('.')+'.',next={},removed={};
+  for(const [key,value]of Object.entries(this.data.autoFill)){
+   const tail=key.startsWith(prefix)?key.slice(prefix.length):'',part=tail.split('.')[0];
+   if(!/^\d+$/.test(part)){next[key]=value;continue;}
+   const at=Number(part);
+   if(delta<0&&at===index){removed[key]=value;continue;}
+   next[at>=index?prefix+(at+delta)+tail.slice(part.length):key]=value;
+  }
+  this.data.autoFill={...next,...restore};return removed;
+ }
+ remove(path){let target=this.data;for(const k of path.slice(0,-1))target=target[k];this.undo={path:[...path],value:clone(target[path.at(-1)]),array:Array.isArray(target)};if(Array.isArray(target)){this.undo.policies=this.reindexPolicies(path.slice(0,-1),Number(path.at(-1)),-1);target.splice(path.at(-1),1);}else delete target[path.at(-1)];for(const key of this.errors.keys()){const p=JSON.parse(key);if(path.every((k,i)=>p[i]===k))this.errors.delete(key);}this.changed();this.render();}
  button(text,fn,cls){const b=el('button',text,cls);b.type='button';b.addEventListener('click',fn);return b;}
+ policies(panel){
+  const values=ResumeMatcher.flatten({...this.data,autoFill:{}});
+  const table=el('div',undefined,'profile-policy-list');
+  for(const path of new Set([...basics.map(key=>'basics.'+key),...Object.keys(values),...Object.keys(this.data.autoFill||{})])){
+   if(/Parts\.(?:year|month|day)$/.test(path))continue;
+   const row=el('label',undefined,'profile-policy-row');
+   const title=path.split('.').map(key=>/^\d+$/.test(key)?'第 '+(Number(key)+1)+' 条':names[key]||ResumeMatcher.familyRoles[key]?.[0]||key).join(' · ');
+   row.append(el('span',title));
+   const select=el('select');select.setAttribute('aria-label',title+' 填写策略');
+   for(const [value,title]of [['auto','允许自动填写'],['review','每次核对'],['never','禁止插件填写']]){
+    const option=el('option',title);option.value=value;select.append(option);
+   }
+   select.value=ResumeMatcher.fieldPolicy(this.data,path);
+   select.onchange=()=>this.set(['autoFill',path],select.value);
+   row.append(select);table.append(row);
+  }
+  panel.append(table);
+ }
  family(panel){
   const value=this.data.family;if(value!==undefined&&!isObject(value)){this.node(panel,['family'],'family',value);return;}
   const members=value||{},roles=window.ResumeMatcher.familyRoles;
@@ -50,15 +80,16 @@ class Editor{
  values.forEach((a,i)=>{if(!isObject(a)){this.node(panel,['fieldAnswers',i],String(i+1),a);return;}const card=el('div',undefined,'profile-record');const header=el('div',undefined,'section-head');header.append(el('h3',a.label||'未命名问题'),this.button('删除答案',()=>this.remove(['fieldAnswers',i]),'danger-link'));card.append(header);if(a.origin)card.append(el('p','来源：'+a.origin,'muted'));this.primitive(card,['fieldAnswers',i,'value'],'value',a.value??'');panel.append(card);});if(!values.length)panel.append(el('p','尚无网站补充答案。','profile-empty'));
  }
  render(){this.counter=0;this.host.replaceChildren();const tabs=el('div',undefined,'profile-tabs');tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','资料分类');for(const group of groups){const b=this.button(names[group],()=>{this.tab=group;this.render();});b.setAttribute('role','tab');b.setAttribute('aria-selected',String(this.tab===group));b.id='profile-tab-'+group;tabs.append(b);}this.host.append(tabs);
- const info=el('div',undefined,'profile-editor-info');info.append(el('span',this.dirty?'有修改尚未保存':'资料已载入，可直接编辑','profile-save-state'));if(this.undo)info.append(this.button('撤销上次删除',()=>{const u=this.undo,target=this.get(u.path.slice(0,-1)),key=u.path.at(-1);if(u.array&&Array.isArray(target))target.splice(Math.min(key,target.length),0,u.value);else if(isObject(target)&&!Object.hasOwn(target,key))target[key]=u.value;this.undo=null;this.changed();this.render();}));this.host.append(info);
+ const info=el('div',undefined,'profile-editor-info');info.append(el('span',this.dirty?'有修改尚未保存':'资料已载入，可直接编辑','profile-save-state'));if(this.undo)info.append(this.button('撤销上次删除',()=>{const u=this.undo,target=this.get(u.path.slice(0,-1)),key=u.path.at(-1);if(u.array&&Array.isArray(target)){this.reindexPolicies(u.path.slice(0,-1),Math.min(key,target.length),1,u.policies);target.splice(Math.min(key,target.length),0,u.value);}else if(isObject(target)&&!Object.hasOwn(target,key))target[key]=u.value;this.undo=null;this.changed();this.render();}));this.host.append(info);
  const panel=el('div',undefined,'profile-panel');panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby','profile-tab-'+this.tab);this.host.append(panel);
  if(recordKeys[this.tab])this.records(panel,this.tab);
  else if(this.tab==='family')this.family(panel);
  else if(this.tab==='basics'){const value=this.data.basics;if(value!==undefined&&!isObject(value))this.node(panel,['basics'],'basics',value);else{const grid=el('div',undefined,'profile-grid');for(const k of new Set([...basics,...Object.keys(value||{})]))if(!k.startsWith('_')&&!['hukou','nativeRegion','currentResidence'].includes(k))this.node(grid,['basics',k],k,Object.hasOwn(value||{},k)?value[k]:'');panel.append(grid);this.addField(panel,['basics']);}}
  else if(this.tab==='skills'){this.node(panel,['skills'],'skills',this.data.skills??'');this.node(panel,['summary'],'summary',this.data.summary??'');}
  else if(this.tab==='fieldAnswers')this.answers(panel);
+ else if(this.tab==='policies')this.policies(panel);
  else if(this.tab==='custom'){if(this.data.custom===undefined||isObject(this.data.custom)){const grid=el('div',undefined,'profile-grid');for(const [k,v]of Object.entries(this.data.custom||{})){const row=el('div',undefined,'profile-custom-item');this.node(row,['custom',k],k,v);row.append(this.button('移除此信息',()=>this.remove(['custom',k]),'danger-link'));grid.append(row);}panel.append(grid);this.addField(panel,['custom']);}else this.node(panel,['custom'],'custom',this.data.custom);}
- else{const entries=Object.entries(this.data).filter(([k])=>!['basics','family','education','work','projects','skills','custom','fieldAnswers','summary'].includes(k)&&!k.startsWith('_'));if(!entries.length)panel.append(el('p','暂时没有其他资料。导入文件中的额外信息会完整保留。','profile-empty'));for(const [k,v]of entries)this.node(panel,[k],k,v);}
+ else{const entries=Object.entries(this.data).filter(([k])=>!['basics','family','education','work','projects','skills','custom','fieldAnswers','summary','autoFill'].includes(k)&&!k.startsWith('_'));if(!entries.length)panel.append(el('p','暂时没有其他资料。导入文件中的额外信息会完整保留。','profile-empty'));for(const [k,v]of entries)this.node(panel,[k],k,v);}
  const genders=el('datalist');genders.id='profile-genders';for(const value of ['男','女','其他','不愿透露']){const option=el('option');option.value=value;genders.append(option);}this.host.append(genders);
  }
 }

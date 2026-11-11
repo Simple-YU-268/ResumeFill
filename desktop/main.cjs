@@ -66,6 +66,7 @@ else {
     fs.mkdirSync(extension, { recursive: true });
     fs.cpSync(path.join(runtime, "extension"), extension, { recursive: true });
     const actions = {
+      resumeAttachmentMetadata: () => controller.resumeAttachmentMetadata(),
       chooseResumeAttachment: async () => {
         const selected = await dialog.showOpenDialog(window, {
           properties: ["openFile"],

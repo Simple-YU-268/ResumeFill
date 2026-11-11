@@ -88,10 +88,16 @@
     if(path.endsWith('.endDate'))return aliases['*.endDate'];
     return aliases[path.replace(/\.\d+\./g,'.*.')]||(!path.includes('.')?aliases['basics.'+path]:null)||(path.startsWith('custom.')?[path.slice(7)]:[]);
   }
+  function fieldPolicy(profile,path){
+    const policies=profile?.autoFill||{};
+    const base=String(path).replace(/(birthday|startDate|endDate|date)Parts\.(?:year|month|day)$/,'$1');
+    const policy=policies[path]??policies[base]??'auto';
+    return ['auto','review','never'].includes(policy)?policy:'review';
+  }
   function flatten(data, prefix='', out={}) {
     const member=prefix.match(/^family\.([^.]+)$/)?.[1];if(member&&familyRoles[member]&&!data?.relationship)out[prefix+'.relationship']=familyRoles[member][0];
     for (const [key,value] of Object.entries(data || {})) {
-      if(!prefix&&key==='_normalization'||/^work\.\d+$/.test(prefix)&&key==='employmentType')continue;
+      if(!prefix&&['_normalization','autoFill'].includes(key)||/^work\.\d+$/.test(prefix)&&key==='employmentType')continue;
       if(!prefix&&key==='fieldAnswers'){
         if(Array.isArray(value))value.forEach((a,i)=>{if(typeof a?.value==='string')out[`fieldAnswers.${i}.value`]=a.value;});
         continue;
@@ -103,6 +109,7 @@
       else if (typeof value === 'string' || typeof value === 'number') out[path]=String(value);
       if(typeof value==='string'&&(/\.(birthday|startDate|endDate)$/.test(path)||/^awards\.\d+\.date$/.test(path))&&root.ResumeProfile){const date=root.ResumeProfile.parseDate(value);if(date)for(const part of ['year','month','day'])if(date[part])out[path+'Parts.'+part]=String(Number(date[part]));}
     }
+    if(!prefix)for(const path of Object.keys(out))if(fieldPolicy(data,path)==='never')delete out[path];
     return out;
   }
   function match(field, values) {
@@ -251,10 +258,10 @@
     const ordered=[...new Set([known?.path,...paths].filter(Boolean))];
     return ordered.filter(path=>values[path]&&allowedPath(field,path)).slice(0,6).map(path=>({path,reason:known?.path===path?'本地字段匹配':'候选资料，请核对',confirmed:known?.path===path}));
   }
-  function decide(field={},values={}){
+  function decide(field={},values={},policies={}){
     const fieldId=field.stableId??field.id??null;
     const risk=field.type==='password'||field.valueType==='password'||field.risk==='protected'||
-      [field.label,field.name,field.id,field.placeholder,field.autocomplete].some(label=>protectedLabel({label}))||
+      [field.label,field.name,field.identity?.id??field.id,field.placeholder,field.autocomplete].some(label=>protectedLabel({label}))||
       root.ResumeAnswers?.protectedField(field)?'protected':field.risk??'normal';
     const result=(action,reason,confidence=0,sourcePath=null,alternatives=[])=>({fieldId,action,confidence,sourcePath,reason,alternatives,risk});
     if(risk==='protected')return result('block','受保护字段');
@@ -269,10 +276,17 @@
     const expected=path=>({ 'basics.email':'email','basics.phone':'phone','basics.website':'url' })[path];
     const conflict=path=>expected(path)&&['email','phone','url','number','integer','date','month','year'].includes(field.valueType)&&expected(path)!==field.valueType;
     const exact=infer(field), matched=match(field,values);
+    const policyPath=matched?.path||exact?.path;
+    if(policyPath){
+      const policy=fieldPolicy({autoFill:policies},policyPath);
+      if(policy==='never')return result('block','资料策略禁止填写');
+      if(policy==='review')return result('review','资料策略要求逐项核对',.98,null,
+        eligible(policyPath)?[{path:policyPath,confidence:.98,reason:'请核对本次填写'}]:[]);
+    }
     if(matched&&eligible(matched.path)&&!conflict(matched.path)&&!['high','identity'].includes(risk)){
       return result('fill','本地字段匹配',exact?.path===matched.path?0.98:Math.min(.97,.78+Math.max(0,matched.score-78)*.19/22),matched.path);
     }
-    const signals=[field.label,field.name,field.id,field.placeholder].map(labelVariants);
+    const signals=[field.label,field.name,field.identity?.id??field.id,field.placeholder].map(labelVariants);
     const ranked=Object.keys(values).filter(path=>eligible(path)&&!path.startsWith('fieldAnswers.')).map(path=>{
       const aliases=namesFor(path).map(normalize).filter(Boolean);
       const [label,name,id,placeholder]=signals.map(tokens=>tokens.some(token=>aliases.includes(token)));
@@ -298,6 +312,6 @@
     const skill=path.match(/^(skills\.\d+)\.name$/),category=skill&&values[skill[1]+'.category'];
     return {sourceValue:value,kind:/^basics\.(?:city|hukouAddress|nativePlace|expectedCity)$/.test(path)?'region':'exact',parts:category?[String(category),value]:value.split(/\s*[>＞→]\s*/).filter(Boolean)};
   }
-  root.ResumeMatcher={workProfile,bindWork,familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,match,decide,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,optionContains,numericInterval,numericOptions,allowedPath,candidatePaths};
+  root.ResumeMatcher={workProfile,bindWork,familyRoles,familyFields,familyRole,familyPath,isFamilyField,recordSections,flatten,fieldPolicy,match,decide,infer,normalize,labelVariants,suggestions,resolveField,referenceData,enums,enumKey,canonicalOption,optionContains,numericInterval,numericOptions,allowedPath,candidatePaths};
   if (typeof module!=='undefined') module.exports=root.ResumeMatcher;
 })(globalThis);

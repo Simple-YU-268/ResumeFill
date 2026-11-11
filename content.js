@@ -12,6 +12,7 @@
     revision = 0,
     busy = false,
     scannedUrl = "",
+    lastFillReport = null,
     operationController = null,
     pendingOperation = null;
   const workModules = new WeakMap();
@@ -875,10 +876,11 @@
         const label =
           config.label ||
           effectiveMokaLabel ||
-          structural.groupLabel ||
-          labels[0] ||
-          linked ||
           el.getAttribute("aria-label") ||
+          linked.trim() ||
+          structural.groupLabel ||
+          (el.closest("dd")?.previousElementSibling?.matches("dt") ? structural.label : null) ||
+          labels[0] ||
           structural.label ||
           containerLabels[0] ||
           inferred.label ||
@@ -886,8 +888,9 @@
           el.name ||
           el.id ||
           "未命名字段";
-        const tokens = effectiveMokaLabel
-          ? [effectiveMokaLabel]
+        const explicitLabel = config.label || effectiveMokaLabel || el.getAttribute("aria-label") || linked.trim();
+        const tokens = explicitLabel
+          ? [explicitLabel]
           : [
               config.label,
               ...labels,
@@ -910,8 +913,10 @@
             : {}),
           label,
           labelProvenance: config.label ? "adapter" : effectiveMokaLabel ? "container" :
+            el.getAttribute("aria-label") ? "aria-label" : linked.trim() ? "aria-labelledby" :
             structural.groupLabel ? (el.closest('[role="radiogroup"],fieldset')?.querySelector(':scope > legend')?.textContent.trim() === structural.groupLabel ? "legend" : "group") :
-            labels[0] ? "label" : linked.trim() ? "aria-labelledby" : el.getAttribute("aria-label") ? "aria-label" :
+            el.closest("dd")?.previousElementSibling?.matches("dt") && structural.label ? "dt-dd" :
+            labels[0] ? "label" :
             structural.label ? (el.closest("dd")?.previousElementSibling?.matches("dt") && structural.evidence === "定义列表标签" ? "dt-dd" : "structure") :
             containerLabels[0] ? "container" : inferred.label ? "geometry" : el.placeholder ? "placeholder" : "attribute",
           name: el.name || "",
@@ -1090,6 +1095,10 @@
           };
         }
         field.stableId = stableIds.get(el);
+        field.identity = {label:field.label,name:field.name,id:el.id || "",
+          placeholder:field.placeholder,type:field.type,valueType:field.valueType};
+        field.fingerprint = A.fingerprint([field]);
+        field.risk = ResumeMatcher.decide(field, {}).risk;
         field.position = {
           x: Math.round(rect.x),
           y: Math.round(rect.y),
@@ -1341,10 +1350,45 @@
       f.section,f.recordIndex,f.path,f.context,f.familyRole,f.workModuleId,
       f.datePart,f.datePath,f.regionRole,f.regionLevel,f.required]);
   }
+  function watchForm(entries, signal) {
+    const candidates = [...new Set(entries.map(d => selectedScope?.root ||
+      (d.root?.host ? d.root : d.el.closest('form,main,section,fieldset') || d.el.parentElement)))]
+      .filter(root => root && root !== document && root !== document.body);
+    const roots = candidates.filter(root => !candidates.some(other => other !== root && ResumeLayout.contains(other,root)));
+    const observers = [];
+    let lastActivity = performance.now(), mutations = 0, resources = 0, resourceObserver, disconnected = false;
+    const changed = records => {mutations += records.length; lastActivity = performance.now();};
+    for (const root of roots) {
+      const observer = new MutationObserver(changed);
+      observer.observe(root,{attributes:true,childList:true,characterData:true,subtree:true,
+        attributeFilter:['hidden','inert','aria-hidden','aria-label','aria-labelledby','aria-required','aria-invalid','class','style','type','name','id','placeholder','required']});
+      observers.push(observer);
+    }
+    try {
+      resourceObserver = new PerformanceObserver(list => {resources += list.getEntries().length;lastActivity = performance.now();});
+      resourceObserver.observe({entryTypes:['resource']});
+    } catch {}
+    const disconnect = () => {
+      if (disconnected) return;
+      disconnected = true;
+      observers.forEach(observer => observer.disconnect());
+      resourceObserver?.disconnect();
+      signal.removeEventListener('abort',disconnect);
+    };
+    signal.addEventListener('abort',disconnect,{once:true});
+    return {roots,disconnect,async settle(){
+      const start = performance.now();
+      while (!signal.aborted && performance.now()-lastActivity < 150 && performance.now()-start < 1200)
+        await new Promise(resolve => setTimeout(resolve,50));
+      return {mutations,resources,timedOut:!signal.aborted && performance.now()-lastActivity < 150};
+    }};
+  }
   async function fill(message) {
     if (location.href !== scannedUrl) throw Error("页面地址已变化，请重新扫描");
     operationController = new AbortController();
     const original = [...registry.values()];
+    const watcher = watchForm(original,operationController.signal);
+    try {
     let rescans = 0;
     function rebind(d) {
       if (rescans >= 3 || message.saveCards || location.href !== scannedUrl ||
@@ -1445,6 +1489,7 @@
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
+    const settled = await watcher.settle();
     const previousRegistry = registry, previousRevision = revision;
     let live = new Map();
     try {
@@ -1454,6 +1499,12 @@
       registry = previousRegistry;
       revision = previousRevision;
     }
+    const known = new Set(original.map(d => d.field.stableId));
+    const discovered = [...live.values()].filter(d => !known.has(d.field.stableId) &&
+      watcher.roots.some(root => ResumeLayout.contains(root,d.el)));
+    const adaptation = {...settled,newFields:discovered.slice(0,50).map(({field:f}) => ({
+      stableId:f.stableId,label:f.label,type:f.type,section:f.section,recordIndex:f.recordIndex})),
+      limited:discovered.length > 50,requiresReview:discovered.length > 0};
     for (const item of message.items) {
       const result = results.find((r) => r.id === item.id),
         d = registry.get(item.id);
@@ -1538,7 +1589,14 @@
           });
         }
       }
-    return { results, saves, submissionVerified: false };
+    lastFillReport = {
+      url: location.href,
+      revision,
+      entries: message.items.map(item => ({descriptor: registry.get(item.id),
+        expected: item.value, status: results.find(result => result.id === item.id)?.status})),
+    };
+    return { results, saves, adaptation, submissionVerified: false };
+    } finally { watcher.disconnect(); }
   }
   globalThis.ResumeFillPage = {
     isBusy: () => busy,
@@ -1637,12 +1695,46 @@
     },
   };
   let pendingAttachment;
-  function preflight() {
+  function resumeFileTarget(input) {
+    if (!input.parentElement || !ResumeLayout.visible(input.parentElement)) return null;
+    const labels = Array.from(input.labels || []).filter(ResumeLayout.visible);
+    const wrapper = input.closest('.el-upload,.ant-upload,.ivu-upload,.semi-upload,[data-resume-upload]');
+    const owner = labels[0] || (wrapper && ResumeLayout.visible(wrapper) && wrapper);
+    if (!ResumeLayout.visible(input) && !owner) return null;
+    if (wrapper && query(wrapper,'input[type="file"]').length !== 1) return null;
+    const label = [...labels.map(text),input.getAttribute('aria-label'),
+      wrapper?.getAttribute('aria-label')].filter(Boolean).join(' ');
+    return /简历|\b(?:resume|cv)\b/i.test(label) ? {input,label} : null;
+  }
+  async function preflight() {
     if (!scannedUrl || scannedUrl !== location.href) throw Error("请重新扫描当前表单");
     const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
     const collect = selector => [...new Set(roots.flatMap(root => shown(root, selector)))];
     const entries = new Map([...registry.values()].map(item => [item.el,item]));
     const issues = [];
+    const challenges = collect('[autocomplete="one-time-code"],[data-sitekey],iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"],[class*="captcha"],[id*="captcha"]');
+    if (challenges.length) issues.push({code:'challenge',label:'可见验证码或安全挑战，请在网页人工完成'});
+    if (lastFillReport?.url === location.href && lastFillReport.revision === revision) {
+      const savedRegistry = registry, savedRevision = revision;
+      let current;
+      try { scan(); current = new Map([...registry.values()].map(entry => [entry.el,entry])); }
+      finally { registry = savedRegistry; revision = savedRevision; }
+      for (const {descriptor:d,expected,status} of lastFillReport.entries) {
+        if (!d) continue;
+        if (!d.el.isConnected) {issues.push({code:'unconfirmed',label:d.field.label});continue;}
+        if (!roots.some(root => ResumeLayout.contains(root,d.el)) || !ResumeLayout.visible(d.el)) continue;
+        const live = current.get(d.el);
+        if (!live || rebindKey(live) !== rebindKey(d))
+          issues.push({code:'semantic-drift',label:d.field.label});
+        else if (status !== 'verified') issues.push({code:'unconfirmed',label:d.field.label});
+        else {
+          try {
+            if ((await C.verify(d,expected)).status !== 'verified')
+              issues.push({code:'readback-changed',label:d.field.label});
+          } catch { issues.push({code:'unconfirmed',label:d.field.label}); }
+        }
+      }
+    }
     for (const el of new Set([...collect('input,textarea,select,[aria-required="true"]'),
       ...[...entries.keys()].filter(el => roots.some(root => ResumeLayout.contains(root,el)) && ResumeLayout.visible(el))])) {
       if (el.matches(':disabled,[aria-disabled="true"],[type="hidden"]')) continue;
@@ -1660,26 +1752,27 @@
       .filter(el => !el.matches(':disabled,[aria-disabled="true"]'))
       .map(el => (el.getAttribute('aria-label') || text(el) || (el.tagName === 'INPUT' ? el.value : '')).slice(0,100))
       .filter(label => /submit|apply|send|提交|投递|申请|发送/i.test(label)).slice(0,5);
-    return {issues,candidates};
+    return {issues,candidates,submissionVerified:false};
   }
   function resumeAttachment(message) {
     if (!scannedUrl || location.href !== scannedUrl) throw Error("请重新扫描当前表单");
     const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
-    const candidates = [...new Set(roots.flatMap(root => shown(root, 'input[type="file"]')))].filter(el =>
+    const candidates = [...new Set(roots.flatMap(root => query(root, 'input[type="file"]')))].filter(el =>
       !el.matches(':disabled,[aria-disabled="true"]') && !el.files.length &&
-      /简历|\b(?:resume|cv)\b/i.test([...Array.from(el.labels || []).filter(ResumeLayout.visible).map(text),el.getAttribute('aria-label')].join(' ')) &&
-      (!el.accept || el.accept.split(',').some(s => ['.pdf','application/pdf','application/*'].includes(s.trim().toLowerCase()))));
+      (!el.accept || el.accept.split(',').some(s => ['.pdf','application/pdf','application/*'].includes(s.trim().toLowerCase()))))
+      .map(resumeFileTarget).filter(Boolean);
     if (candidates.length !== 1) throw Error("请在网页上手动选择简历附件");
-    const input = candidates[0];
+    const {input,label} = candidates[0];
     if (!message.dataBase64) {
       const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte =>
         byte.toString(16).padStart(2, "0")).join("");
-      pendingAttachment = { token, input, revision };
+      pendingAttachment = { token, input, label, revision, expiresAt:Date.now()+300000 };
       return { token };
     }
     const approved = pendingAttachment;
     pendingAttachment = null;
-    if (!approved || approved.token !== message.token || approved.input !== input || approved.revision !== revision)
+    if (!approved || approved.token !== message.token || approved.input !== input || approved.label !== label ||
+        approved.revision !== revision || approved.expiresAt < Date.now())
       throw Error("附件栏已变化，请重新确认");
     if (typeof message.fileName !== 'string' || !/\.pdf$/i.test(message.fileName) ||
         !Number.isInteger(message.size) || message.size < 8 || message.size > 15 * 1024 * 1024 ||

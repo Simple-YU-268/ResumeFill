@@ -11,3 +11,9 @@ const partial=S.plan({basics:{address:'Keep address',gender:'女'}},{basics:{add
 console.log('PASS: desktop ethnicity diff, explicit conflicts/sensitive/record groups, preserve learned answers and local-only fields, no blank clears, immutable merge and stale source/target rejection');
 const familySync=S.plan({basics:{}}, {basics:{},family:{father:{name:'Synthetic Parent'}}});
 assert.equal(familySync.items[0].sensitive,true);assert.equal(familySync.items[0].checked,false);
+const policyRemote={basics:{},autoFill:{'basics.email':'never'}};
+const policySync=S.plan({basics:{}},policyRemote);
+assert.equal(policySync.items[0].path.join('.'),'autoFill');
+assert.equal(policySync.items[0].group,true);
+assert.equal(policySync.items[0].checked,false);
+assert.deepEqual(S.apply({basics:{}},policyRemote,policySync,[0]).autoFill,policyRemote.autoFill);
