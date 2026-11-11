@@ -1564,7 +1564,8 @@
     if (candidates.length !== 1) throw Error("请在网页上手动选择简历附件");
     const input = candidates[0];
     if (!message.dataBase64) {
-      const token = crypto.randomUUID();
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte =>
+        byte.toString(16).padStart(2, "0")).join("");
       pendingAttachment = { token, input, revision };
       return { token };
     }
