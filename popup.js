@@ -343,7 +343,8 @@ attachResume.onclick = async () => {
     const file = await request(sha256);
     if (snapshot !== page || file.sha256 !== sha256 || !file.dataBase64) throw Error("表单或附件已变化，请重新确认");
     const result = await send({...file,type:"RF_RUN_UPLOAD",token});
-    $("status").textContent = result.selected ? "已选中 PDF，请在网页上核对上传状态" : "无法确认附件状态，请在网页上核对";
+    if (result.rescanRequired) clearPage();
+    $("status").textContent = result.rescanRequired ? "附件可能触发简历解析，请等待网页稳定后重新扫描" : result.selected ? "已选中 PDF，请在网页上核对上传状态" : "无法确认附件状态，请在网页上核对";
     attachmentApproval = null;
   } catch (error) {
     attachmentApproval = null;
@@ -532,6 +533,7 @@ async function scan(incremental = false, learning = false) {
         "profile.js",
         "matcher.js",
         "layout.js",
+        "platform-workflows.js",
         "adapters.js",
         "controls.js",
         "answers.js",
@@ -759,7 +761,7 @@ function summary() {
     ).length,
     missing = snapshot.coverage.reduce((n, c) => n + c.missing, 0);
   $("summary").textContent =
-    `${snapshot.adapter || "通用识别"} · ${rows.length} 个字段 · 有资料 ${matched} · 必填缺漏 ${required} · 待补经历 ${missing}`;
+    `${snapshot.workflow?.statusText || snapshot.adapter || "通用识别"} · ${rows.length} 个字段 · 有资料 ${matched} · 必填缺漏 ${required} · 待补经历 ${missing}`;
 }
 $("edit").onclick = () => chrome.runtime.openOptionsPage();
 $("scan").onclick = () => run(scan);

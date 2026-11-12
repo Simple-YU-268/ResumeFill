@@ -463,6 +463,15 @@
     if (moka) return moka;
     const family = familyContextFor(el);
     if (family) return family;
+    const platformContext = globalThis.ResumePlatforms?.context(el);
+    if (platformContext) {
+      const { workModuleAnchor, ...context } = platformContext;
+      if (workModuleAnchor) {
+        if (!workModules.has(workModuleAnchor)) workModules.set(workModuleAnchor, 'work-module-' + ++nextWorkModule);
+        context.workModuleId = workModules.get(workModuleAnchor);
+      }
+      return context;
+    }
     if (s.key)
       return {
         section: s.key,
@@ -631,7 +640,7 @@
     );
   }
   function mokaContextFor(el) {
-    const block = el.closest('[class*="apply-block-"]'),
+    const block = el.closest('[class*="apply-block-"],[class*="apply-blocks-"]'),
       record = el.closest('[class*="apply-fields-"]');
     if (!block || !record) return null;
     const head = block.querySelector(':scope > [class*="blockTitle-"] > div');
@@ -753,6 +762,8 @@
     return "";
   }
   function descriptor(el, scope, config = {}) {
+    if (el.matches('.phoenix-select') && globalThis.ResumePlatforms?.identify()?.id === 'beisen')
+      config = { ...config, type: 'combobox', phoenixSelect: true, optionsSelector: '.phoenix-selectList__listItem' };
     if (el.matches(".el-cascader"))
       config = { ...config, type: "cascader", elementCascader: true };
     else if (el.matches(".el-select"))
@@ -804,19 +815,21 @@
     scannedUrl = location.href;
     const fields = [],
       sectionIssues = [];
-    const visibleText = ResumeLayout.collect(document).filter(
+    const workflow = globalThis.ResumePlatforms?.inspect();
+    const workflowBlocked = workflow && !workflow.canFill;
+    const visibleText = (workflowBlocked ? [] : ResumeLayout.collect(document)).filter(
       (n) =>
         !selectedScope || ResumeLayout.contains(selectedScope.root, n.parent),
     );
-    for (const s of scopes(activeAdapter)) {
+    for (const s of workflowBlocked ? [] : scopes(activeAdapter)) {
       if (s.error) {
         sectionIssues.push({ section: s.key, error: s.error });
         continue;
       }
       const candidates = shown(
         s.scope,
-        '[role="radiogroup"],[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"],input,textarea,select,[contenteditable="true"]',
-      );
+        '[role="radiogroup"],[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,.phoenix-select,[class*="sd-Select-container-"],input,textarea,select,[contenteditable="true"]',
+      ).filter(el => !el.matches('.phoenix-select') || globalThis.ResumePlatforms?.identify()?.id === 'beisen');
       const used = new Set();
       const add = (el, config = {}) => {
         const configuredControl =
@@ -826,6 +839,7 @@
           ResumeLayout.visible(el);
         if (used.has(el) || (!eligible(el) && !configuredControl)) return;
         const d = descriptor(el, s.scope, config);
+        d.platformGuard = globalThis.ResumePlatforms?.controlGuard(el);
         if (selectedScope)
           d.scopeGuard = () =>
             selectedScope?.root.isConnected &&
@@ -881,6 +895,7 @@
           structural.groupLabel ||
           (el.closest("dd")?.previousElementSibling?.matches("dt") ? structural.label : null) ||
           labels[0] ||
+          globalThis.ResumePlatforms?.label(el) ||
           structural.label ||
           containerLabels[0] ||
           inferred.label ||
@@ -888,7 +903,7 @@
           el.name ||
           el.id ||
           "未命名字段";
-        const explicitLabel = config.label || effectiveMokaLabel || el.getAttribute("aria-label") || linked.trim();
+        const explicitLabel = config.label || effectiveMokaLabel || el.getAttribute("aria-label") || linked.trim() || globalThis.ResumePlatforms?.label(el);
         const tokens = explicitLabel
           ? [explicitLabel]
           : [
@@ -916,7 +931,7 @@
             el.getAttribute("aria-label") ? "aria-label" : linked.trim() ? "aria-labelledby" :
             structural.groupLabel ? (el.closest('[role="radiogroup"],fieldset')?.querySelector(':scope > legend')?.textContent.trim() === structural.groupLabel ? "legend" : "group") :
             el.closest("dd")?.previousElementSibling?.matches("dt") && structural.label ? "dt-dd" :
-            labels[0] ? "label" :
+            labels[0] ? "label" : globalThis.ResumePlatforms?.label(el) ? "platform-container" :
             structural.label ? (el.closest("dd")?.previousElementSibling?.matches("dt") && structural.evidence === "定义列表标签" ? "dt-dd" : "structure") :
             containerLabels[0] ? "container" : inferred.label ? "geometry" : el.placeholder ? "placeholder" : "attribute",
           name: el.name || "",
@@ -927,7 +942,7 @@
           component: el.closest('.el-input,.el-select,.el-cascader,.el-date-editor') ? "element" :
             el.closest('.ant-input,.ant-select,.ant-picker') ? "ant" :
             el.closest('.ivu-input-wrapper,.ivu-select,.ivu-date-picker') ? "iview" :
-            d.config.mokaSelect ? "moka" : d.config.layuiSelect ? "layui" :
+            d.config.phoenixSelect ? "phoenix" : d.config.mokaSelect ? "moka" : d.config.layuiSelect ? "layui" :
             el.closest('[class*="sd-Dropdown-container"],[class*="sd-Input-container"]') ? "semi" : "native",
           tokens: tokens.length
             ? tokens
@@ -947,6 +962,7 @@
             !!el.required ||
             el.getAttribute("aria-required") === "true" ||
             !!container?.classList.contains("is-required") ||
+            !!container?.querySelector('.form-item__required') ||
             !!container?.querySelector(
               ':scope > [class*="title-"] [class*="required-asterisk-"]',
             ),
@@ -1165,7 +1181,7 @@
       candidates.forEach((el) => {
         if (
           !el.parentElement?.closest(
-            '[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"],[contenteditable="true"]',
+            '[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"],[contenteditable="true"]' + (globalThis.ResumePlatforms?.identify()?.id === 'beisen' ? ',.phoenix-select' : ''),
           )
         )
           add(el);
@@ -1267,6 +1283,7 @@
         ? { section: selectedScope.key, recordIndex: selectedScope.index }
         : null,
       adapter: selectedScope ? null : activeAdapter?.id || null,
+      workflow: globalThis.ResumePlatforms?.inspect() || null,
       url: location.href,
       origin: location.origin,
       page: location.pathname,
@@ -1384,6 +1401,7 @@
     }};
   }
   async function fill(message) {
+    globalThis.ResumePlatforms?.assertReady();
     if (location.href !== scannedUrl) throw Error("页面地址已变化，请重新扫描");
     operationController = new AbortController();
     const original = [...registry.values()];
@@ -1696,6 +1714,8 @@
   };
   let pendingAttachment;
   function resumeFileTarget(input) {
+    const platformOwner = globalThis.ResumePlatforms?.attachmentOwner(input);
+    if (platformOwner) return { input, label: platformOwner.label };
     if (!input.parentElement || !ResumeLayout.visible(input.parentElement)) return null;
     const labels = Array.from(input.labels || []).filter(ResumeLayout.visible);
     const wrapper = input.closest('.el-upload,.ant-upload,.ivu-upload,.semi-upload,[data-resume-upload]');
@@ -1712,6 +1732,8 @@
     const collect = selector => [...new Set(roots.flatMap(root => shown(root, selector)))];
     const entries = new Map([...registry.values()].map(item => [item.el,item]));
     const issues = [];
+    const workflow = globalThis.ResumePlatforms?.inspect();
+    if (workflow && !workflow.canFill) issues.push({code:'platform-handoff',label:globalThis.ResumePlatforms.summary(workflow)});
     const challenges = collect('[autocomplete="one-time-code"],[data-sitekey],iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"],[class*="captcha"],[id*="captcha"]');
     if (challenges.length) issues.push({code:'challenge',label:'可见验证码或安全挑战，请在网页人工完成'});
     if (lastFillReport?.url === location.href && lastFillReport.revision === revision) {
@@ -1755,6 +1777,7 @@
     return {issues,candidates,submissionVerified:false};
   }
   function resumeAttachment(message) {
+    globalThis.ResumePlatforms?.assertReady();
     if (!scannedUrl || location.href !== scannedUrl) throw Error("请重新扫描当前表单");
     const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
     const candidates = [...new Set(roots.flatMap(root => query(root, 'input[type="file"]')))].filter(el =>
@@ -1784,7 +1807,10 @@
     dt.items.add(new win.File([Uint8Array.from(raw, c => c.charCodeAt(0))], message.fileName, {type:'application/pdf'}));
     input.files = dt.files;
     input.dispatchEvent(new win.Event('change', { bubbles:true, composed:true }));
-    return { selected: input.isConnected && input.files[0]?.name === message.fileName && input.files[0]?.size === message.size };
+    const selected = input.isConnected && input.files[0]?.name === message.fileName && input.files[0]?.size === message.size;
+    const rescanRequired = globalThis.ResumePlatforms?.inspect()?.attachmentMode === 'parse-before-fill';
+    if (rescanRequired) { scannedUrl = ''; registry.clear(); revision++; }
+    return { selected, ...(rescanRequired ? {rescanRequired:true} : {}) };
   }
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.type === "RF_CANCEL") {

@@ -1,0 +1,52 @@
+const assert=require('node:assert/strict'),path=require('node:path'),{chromium}=require('playwright');
+(async()=>{
+ const browser=await chromium.launch({channel:'msedge',headless:true});
+ try {
+  const page=await browser.newPage();await page.route('https://**/*',route=>route.fulfill({body:'<main></main>',contentType:'text/html'}));
+  const load=async(host,html)=>{
+   await page.goto('https://'+host+'/form');await page.setContent(html);
+   for(const file of ['profile.js','matcher.js','layout.js','platform-workflows.js','adapters.js','controls.js','answers.js'])await page.addScriptTag({path:path.join(__dirname,file)});
+   await page.evaluate(()=>globalThis.chrome={runtime:{onMessage:{addListener:fn=>globalThis.listener=fn}}});
+   await page.addScriptTag({path:path.join(__dirname,'content.js')});
+  };
+  const call=message=>page.evaluate(message=>new Promise(resolve=>listener(message,{},resolve)),message);
+  const scan=()=>call({type:'RF_SCAN',adapters:{version:1,adapters:[]}});
+  const field=(label,control)=>`<div class="form-item"><div class="form-item__text">${label}</div>${control}</div>`;
+  const html='<section><h2>基本信息</h2><div class="ux-standard-form">'+field('姓名','<input id="person">')+field('性别','<div class="phoenix-select"><span class="phoenix-select__placeHolder phoenix-select__placeHolder--show">请选择</span><span class="phoenix-select__selection"></span><input class="phoenix-select__input" value="搜索残留"></div>')+field('个人简历','<input type="file" accept=".pdf" style="display:none">')+'</div></section><section><h2>教育经历</h2>'+[0,1].map(i=>'<div class="ux-standard-form">'+field('学校名称',`<input id="school${i}">`)+'</div>').join('')+'</section>';
+  await load('synthetic.zhiye.com',html);
+  assert.deepEqual(await page.evaluate(()=>['https://evilzhiye.com/form','https://zhiye.com.evil.test/form','http://a.zhiye.com/form','https://a:b@a.zhiye.com/form'].map(ResumePlatforms.identify)),[null,null,null,null]);
+  let snapshot=await scan();assert.equal(snapshot.workflow.platform,'beisen');assert.equal(snapshot.workflow.stage,'form');
+  assert.deepEqual(snapshot.fields.filter(f=>f.section==='education').map(f=>[f.label,f.recordIndex]),[['学校名称',0],['学校名称',1]]);
+  const gender=snapshot.fields.find(f=>f.label==='性别');assert.equal(gender.component,'phoenix');assert.equal(gender.value,'');assert.equal(snapshot.fields.length,4);
+  await page.evaluate(()=>{const root=document.querySelector('.phoenix-select'),input=root.querySelector('input');input.oninput=()=>{throw Error('fixed select must not search');};input.onclick=()=>{const menu=document.createElement('div');menu.className='phoenix-selectList';for(const value of ['男','女']){const option=document.createElement('div');option.className='phoenix-selectList__listItem';option.textContent=value;option.onclick=()=>{root.querySelector('.phoenix-select__selection').textContent=value;root.querySelector('.phoenix-select__placeHolder').classList.remove('phoenix-select__placeHolder--show');menu.remove();};menu.append(option);}document.body.append(menu);};});
+  const result=await call({type:'RF_FILL',overwrite:true,items:[{id:gender.id,path:'basics.gender',value:'女'}]});assert.equal(result.results[0].status,'verified',JSON.stringify(result));
+  assert.equal(await page.locator('.phoenix-select__input').inputValue(),'搜索残留');
+  await page.locator('.phoenix-select').evaluate(el=>el.classList.add('phoenix-select--multi'));
+  const multi=await call({type:'RF_FILL',overwrite:true,items:[{id:gender.id,path:'basics.gender',value:'男'}]});assert.equal(multi.results[0].status,'failed');
+  await page.locator('.phoenix-select').evaluate(el=>{el.classList.remove('phoenix-select--multi');const input=el.querySelector('input'),open=input.onclick;input.onclick=()=>{open();document.querySelector('.phoenix-selectList').classList.add('phoenix-selectList--showFooter');};});
+  const deferred=await call({type:'RF_FILL',overwrite:true,items:[{id:gender.id,path:'basics.gender',value:'男'}]});assert.equal(deferred.results[0].status,'failed');assert.match(deferred.results[0].error,/额外确认/);assert.equal(await page.locator('.phoenix-select__selection').innerText(),'女');await page.locator('.phoenix-selectList').evaluate(el=>el.remove());
+  const person=snapshot.fields.find(f=>f.label==='姓名');
+  await page.locator('#person').evaluate(el=>el.closest('.form-item').querySelector('.form-item__text').textContent='邮箱');
+  const drift=await call({type:'RF_FILL',items:[{id:person.id,path:'basics.name',value:'Must Not Write'}]});assert.equal(drift.results[0].status,'failed');assert.equal(await page.locator('#person').inputValue(),'');
+  await page.locator('#person').evaluate(el=>el.closest('.form-item').querySelector('.form-item__text').textContent='姓名');
+  await page.evaluate(()=>{const modal=document.createElement('div');modal.setAttribute('role','dialog');modal.innerHTML='<input type="password">';document.body.append(modal);});
+  const blocked=await call({type:'RF_FILL',items:[{id:person.id,path:'basics.name',value:'Synthetic Name'}]});assert.match(blocked.error,/请先登录/);assert.equal(await page.locator('#person').inputValue(),'');
+  snapshot=await scan();assert.equal(snapshot.fields.length,0);assert.equal(snapshot.workflow.stage,'login');
+  await page.locator('[role=dialog]').evaluate(el=>el.remove());await scan();const target=await call({type:'RF_RUN_UPLOAD'});assert.ok(target.token);
+  const bytes=Buffer.from('%PDF-1.7\nSynthetic fixture\n');const uploaded=await call({type:'RF_RUN_UPLOAD',token:target.token,fileName:'synthetic.pdf',size:bytes.length,dataBase64:bytes.toString('base64')});assert.equal(uploaded.selected,true);assert.equal(uploaded.rescanRequired,true);
+  assert.match((await call({type:'RF_FILL',items:[]})).error,/重新扫描/);
+  await load('synthetic.zhiye.com','<section><h2>工作经历</h2><div class="ux-standard-form">'+field('公司名称','<input id="employment">')+'</div></section><section><h2>实习经历</h2><div class="ux-standard-form">'+field('公司名称','<input id="internship">')+'</div></section><section><h2>自定义信息</h2><div class="ux-standard-form">'+field('姓名','<input id="unknown">')+'</div></section>');
+  snapshot=await call({type:'RF_SCAN',adapters:{version:1,adapters:[]},workProfile:{key:'synthetic',records:[{index:0,type:'internship'},{index:1,type:'employment'}]}});
+  const work=snapshot.fields.filter(f=>f.section==='work');assert.equal(work.length,2);assert.notEqual(work[0].workModuleId,work[1].workModuleId);assert.deepEqual(work.map(f=>f.recordIndex),[1,0]);assert.equal(snapshot.fields.find(f=>f.name===''&&f.context==='北森未知区块').contextBlocked,true);
+  await page.evaluate(()=>{const modal=document.createElement('div');modal.setAttribute('role','dialog');modal.innerHTML='<input type="tel"><button>短信登录</button>';document.body.append(modal);});assert.equal((await scan()).workflow.stage,'login');
+  await page.locator('[role=dialog]').evaluate(el=>el.remove());await page.evaluate(()=>{const alert=document.createElement('p');alert.setAttribute('role','alert');alert.textContent='投递次数已达上限';document.body.append(alert);});assert.equal((await scan()).workflow.stage,'limited');
+  await load('app.mokahr.com','<section class="apply-blocks-fixture"><div class="blockTitle-fixture"><div>教育背景</div></div>'+[0,1].map(i=>'<div class="apply-fields-fixture"><div class="apply-field-fixture"><div class="title-fixture">学校名称</div><input></div></div>').join('')+'</section>');snapshot=await scan();assert.equal(snapshot.workflow.stage,'form');assert.deepEqual(snapshot.fields.map(f=>[f.section,f.recordIndex]),[['education',0],['education',1]]);
+  await page.setContent('<div class="apply-field-fixture"><div class="title-fixture">个人简历</div><input type="file" hidden accept=".pdf"></div>');assert.equal((await scan()).workflow.stage,'form');assert.ok((await call({type:'RF_RUN_UPLOAD'})).token);
+  await page.setContent('<h1>职位已关闭</h1>');assert.equal((await scan()).workflow.stage,'closed');
+  await load('campus.zhaopin.com','<form><input aria-label="姓名"></form>');assert.equal((await scan()).workflow.platform,'zhaopin');
+  await page.evaluate(()=>history.pushState({},'', '/postprocess'));snapshot=await scan();assert.equal(snapshot.workflow.stage,'preference');assert.equal(snapshot.fields.length,0);
+  await page.evaluate(()=>history.pushState({},'', '/scrd/postprocess2'));assert.equal((await scan()).workflow.stage,'preference');
+  await page.setContent('<p>No application button</p>');await page.evaluate(()=>history.pushState({},'', '/job'));assert.equal((await scan()).workflow.stage,'unknown');
+  console.log('PASS: strict platform hosts, Beisen labels/records, Phoenix committed selection, live login guard, original PDF and plan invalidation, Moka closed and Zhaopin preference handoff');
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

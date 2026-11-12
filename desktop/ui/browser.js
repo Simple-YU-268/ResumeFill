@@ -29,7 +29,7 @@ function pathName(path){
 function renderPlan(next){
  plan=next;fields.clear();$('browserFields').replaceChildren();$('browserDocuments').replaceChildren();$('browserWork').replaceChildren();
  attachmentPending=false;$('attachment').textContent='选择投递用 PDF';
- $('browserSummary').textContent=next.fields.length+' 个字段 · 请核对后填写';
+ $('browserSummary').textContent=(next.workflow?.statusText ? next.workflow.statusText+' · ' : '')+next.fields.length+' 个字段 · 请核对后填写';
  const available=(next.documents||[]).filter(document=>document.status==='available');
  if(available.length>1){
   const label=document.createElement('label');label.textContent='选择表单文档';
@@ -80,7 +80,8 @@ $('attachment').onclick=async()=>{
  try{
   const result=await command({action:'attachment',token:plan?.token,confirm:attachmentPending});
   attachmentPending=!!result.pending;$('attachment').textContent=attachmentPending?'确认上传 PDF':'选择投递用 PDF';
-  feedback(result.pending?'待上传：'+result.fileName:result.selected?'已选中 PDF，请在网页核对上传状态':'无法确认附件，请在网页核对');
+  if(result.rescanRequired)clearPlan();
+  feedback(result.pending?'待上传：'+result.fileName:result.rescanRequired?'附件可能触发简历解析，请等待网页稳定后重新扫描':result.selected?'已选中 PDF，请在网页核对上传状态':'无法确认附件，请在网页核对');
  }catch{attachmentPending=false;$('attachment').textContent='选择投递用 PDF';}
 };
 $('preflight').onclick=async()=>{

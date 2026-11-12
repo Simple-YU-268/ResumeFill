@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto');
 const WORLD='ResumeFill isolated engine';
-const ENGINE_FILES=['profile.js','matcher.js','layout.js','adapters.js','controls.js','answers.js','content.js'];
+const ENGINE_FILES=['profile.js','matcher.js','layout.js','platform-workflows.js','adapters.js','controls.js','answers.js','content.js'];
 function webURL(value){
  if(typeof value!=='string'||value.length>8192)throw Error('仅支持 HTTP/HTTPS 网站地址');
  let url;try{url=new URL(value);}catch{throw Error('仅支持 HTTP/HTTPS 网站地址');}
@@ -129,7 +129,7 @@ class BrowserEngine{
   }
   const token=crypto.randomUUID();
   this.plan={epoch,token,profileKey:digest(profile),snapshot,values,fields};this.approval=null;
-  return {token,fields,documents:snapshot.documents,selectionRequired:snapshot.selectionRequired,frameDocumentId:snapshot.frameDocumentId,
+  return {token,fields,workflow:snapshot.workflow,documents:snapshot.documents,selectionRequired:snapshot.selectionRequired,frameDocumentId:snapshot.frameDocumentId,
    diagnostics:snapshot.diagnostics,workBindings:snapshot.workBindings,workTopology:snapshot.workTopology,profileKey:snapshot.workProfileKey,
    workRecords:(profile.work||[]).map((record,index)=>({index,type:record.employmentType||'unknown',company:String(record.company||'未命名').slice(0,100)}))};
  }
@@ -163,7 +163,9 @@ class BrowserEngine{
   }
   const approval=this.approval;this.approval=null;
   if(!approval||approval.token!==input.token||approval.sha256!==file.sha256)throw Error('PDF 或表单已变化，请重新选择附件');
-  return this.bridge.send(1,{...file,type:'RF_RUN_UPLOAD',token:approval.target});
+  const result=await this.bridge.send(1,{...file,type:'RF_RUN_UPLOAD',token:approval.target});
+  if(result.rescanRequired)this.invalidate();
+  return result;
  }
  async command(input){
   if(!input||typeof input!=='object')throw Error('无效的网站操作');
