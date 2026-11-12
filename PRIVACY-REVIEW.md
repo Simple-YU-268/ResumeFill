@@ -1,5 +1,7 @@
 # Public release privacy review
 
+Reviewed for v0.28.0 on 2026-11-12. Embedded browser verification uses synthetic profiles, local HTTP fixtures and temporary data directories. Remote websites have no Node or application IPC bridge. Browser sessions use a dedicated persistent partition in user data; cookies and login pages are never exported. CDP origin metadata excludes foreign frames before creating an isolated script world. Same-origin srcdoc additionally requires a verified owner and non-opaque sandbox. The isolated engine shares existing visibility and document checks. Only chosen candidate paths are accepted by the host, which rebuilds values from its local profile snapshot. Profile/navigation changes invalidate plans; PDF confirmation is bound to the original file hash and current target. No automatic submission or PDF generation is introduced. Ignored synthetic UI captures and browser profiles are excluded from Git and packaging.
+
 Reviewed for v0.27.1 on 2026-10-28. Moka compatibility tests use synthetic nested menu options and synthetic project records; no live applicant data or screenshots are included.
 
 Earlier reviews: v0.24.x, v0.23.0, v0.22.0, v0.18.0 and v0.12.0.

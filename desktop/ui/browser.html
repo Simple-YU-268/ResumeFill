@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'"><title>ResumeFill · 网站工作区</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="browser.css"></head>
+<body>
+ <header>
+  <form id="navigation" autocomplete="off">
+   <button type="button" id="back" title="后退" aria-label="后退"><img src="icons/arrow-left.svg" alt=""></button>
+   <button type="button" id="forward" title="前进" aria-label="前进"><img src="icons/arrow-right.svg" alt=""></button>
+   <button type="button" id="reload" title="刷新" aria-label="刷新"><img src="icons/rotate-cw.svg" alt=""></button>
+   <input id="address" type="url" aria-label="网站地址" placeholder="https://…" spellcheck="false" required>
+   <button type="submit" class="primary">打开网站</button>
+   <button type="button" id="external" title="在外部浏览器打开" aria-label="在外部浏览器打开"><img src="icons/external-link.svg" alt=""></button>
+  </form>
+  <div id="browserState" data-loading="false"><strong>ResumeFill 网站工作区</strong><span id="browserLoading" hidden>加载中</span><span id="browserLocation">尚未打开网站</span><span>最终提交由你完成</span></div>
+ </header>
+ <main><div id="browserEmpty"><img src="buddy.svg" alt="" width="186" height="150"><h1>打开你的申请页面</h1></div></main>
+ <aside aria-label="填写核对">
+  <div class="panel-heading"><h2>填写核对</h2><button id="scan" class="primary">扫描表单</button></div>
+  <p id="browserSummary">尚未扫描</p><div id="browserDocuments"></div><div id="browserWork"></div>
+  <div id="browserFields" aria-label="填写计划"></div>
+  <div class="panel-actions"><label><input id="overwrite" type="checkbox">允许覆盖已有内容</label><div class="buttons"><button id="fill" class="primary" disabled>填写已核对字段</button><button id="cancel">停止填写</button></div>
+   <div class="buttons"><button id="attachment" disabled>选择投递用 PDF</button><button id="preflight" disabled>提交前检查</button></div>
+   <p id="browserFeedback" role="status"></p>
+  </div>
+ </aside><script src="field-labels.js"></script><script src="browser.js"></script>
+</body></html>

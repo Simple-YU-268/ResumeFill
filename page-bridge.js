@@ -40,5 +40,5 @@
   selected.route.explicit=!!message.documentId||!!prior?.explicit;await chrome.storage.session.set({[key(tabId)]:selected.route});return wrap(selected.result,selected.route,documents,diagnostics);
  }
  async function send(tabId,message){const route=(await chrome.storage.session.get(key(tabId)))[key(tabId)];if(!route)throw Error('请先选择表单文档并扫描');const tab=await chrome.tabs.get(tabId);if(tab.url!==route.tabUrl)throw Error('外层页面已变化，请重新扫描');const f=(await frameInfo(tabId,[route.frameId]))[0];if(!f?.result?.visible||f.documentId!==route.documentId||f.result.url!==route.url||!eligible(f.result,new URL(tab.url).origin))throw Error('嵌入表单已刷新、隐藏或跳转，请重新扫描');try{requireRuntime(f.result);}catch(e){await chrome.storage.session.remove(key(tabId));throw e;}if(route.runtimeVersion!==chrome.runtime.getManifest().version)throw Error('页面脚本版本已变化，请刷新后扫描');const result=await chrome.tabs.sendMessage(tabId,message,{frameId:route.frameId,documentId:route.documentId});if(result?.error)throw Error(result.error);return message.type==='RF_SCAN'?wrap(result,route):result;}
- globalThis.ResumePageBridge={prepare,scan,send};
+ globalThis.ResumePageBridge={prepare,scan,send,inspect:frameInfo,eligible};
 })();

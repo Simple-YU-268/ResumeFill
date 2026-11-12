@@ -4,7 +4,7 @@
 <p align="center">少填一点，多一点可能。<br>一份个人资料，复用到不同招聘表单。</p>
 <p align="center"><a href="https://github.com/Simple-YU-268/ResumeFill/releases/latest">下载 Windows 版</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/wiki">产品 Wiki</a> · <a href="docs/wiki/Getting-Started.md">安装指南</a> · <a href="https://github.com/Simple-YU-268/ResumeFill/issues">反馈问题</a></p>
 
-**开发测试版：0.27.1（尚未正式发行）** · Windows 桌面端 + Chrome / Edge 扩展 · MIT 开源
+**开发测试版：0.28.0（尚未正式发行）** · Windows 桌面端、内嵌网站工作区 + Chrome / Edge 扩展 · MIT 开源
 
 ResumeFill 是本地优先的简历填表 Agent：把个人资料整理成可视化表单与 JSON，依据招聘网页实际显示的标签、位置和经历分组匹配字段，核对后填写并回读验证。遇到陌生字段，可由 AI 提供建议；模型启用后可主动复核较弱匹配，状态区会标明是否实际使用模型。你手动填写的内容也能经过确认后学习为新资料。最终申请由你提交。
 
@@ -13,8 +13,8 @@ ResumeFill 是本地优先的简历填表 Agent：把个人资料整理成可视
 ## 三步开始
 
 1. **准备资料。** 从 [Releases](https://github.com/Simple-YU-268/ResumeFill/releases/latest) 下载并安装 EXE。在“个人资料”用中文表单编辑，或导入 JSON / PDF 简历。
-2. **连接浏览器。** 在桌面端打开插件目录，在 Chrome / Edge 扩展管理页启用开发者模式，加载该目录。插件点击“自动发现并连接桌面端”，首次在桌面端确认配对。
-3. **扫描、核对、填写。** 切回招聘表单，从工具栏打开插件扫描，检查字段和经历归属，再点击填写。复杂控件或歧义项由你补充核对。
+2. **打开申请网站。** 桌面概览点击“打开网站工作区”，输入地址并自行登录。也可在 Chrome / Edge 加载桌面提供的扩展，首次连接在桌面确认配对。
+3. **扫描、核对、填写。** 在工作区右侧或扩展弹窗扫描，检查字段和经历归属，再点击填写。资料管理中导入的原始 PDF 可经两步确认附到当前表单；最终提交由你在网页完成。
 
 安装版包含运行环境、浏览器扩展和离线 OCR，无需 Node.js。扩展目前通过解压缩目录加载，**尚未上架商店**。详细步骤见 [安装与首次连接](docs/wiki/Getting-Started.md)。
 

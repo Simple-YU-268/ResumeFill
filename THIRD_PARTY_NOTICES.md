@@ -8,5 +8,6 @@ Original application code is provided under the MIT license in LICENSE.
 - Tesseract.js 7.0.0 and tesseract.js-core 7.0.0: Apache-2.0. Runtime dependencies retain upstream licenses.
 - Bundled OCR language data: @tesseract.js-data/eng, chi_sim and chi_tra 1.0.0, variant 4.0.0_best_int. These packages declare MIT; see https://github.com/naptha/tessdata . Runtime model provenance is documented in ocr-data/NOTICE.txt.
 - Playwright is a development dependency only; see its upstream Apache-2.0 license.
+- Website workspace toolbar icons: lucide-static 1.71.0, ISC. Only the selected SVG icons are copied into the desktop UI; their license is included at `ui/icons/LICENSE.lucide`.
 
 OfferLink and CVMax are referenced only as prior feature research. Their extension code, runtime profiles, assets and private service implementations are not included in this repository or distribution.

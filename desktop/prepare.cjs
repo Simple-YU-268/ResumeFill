@@ -76,6 +76,9 @@ fs.writeFileSync(
 for (const f of ["theme.css", "visual.js", "buddy.svg"])
   fs.copyFileSync(path.join(source, f), path.join(__dirname, "ui", f));
 fs.mkdirSync(path.join(__dirname, "ui", "icons"), { recursive: true });
+for (const name of ['arrow-left','arrow-right','rotate-cw','external-link'])
+  fs.copyFileSync(path.join(source,'node_modules/lucide-static/icons',name+'.svg'),path.join(__dirname,'ui/icons',name+'.svg'));
+fs.copyFileSync(path.join(source,'node_modules/lucide-static/LICENSE'),path.join(__dirname,'ui/icons/LICENSE.lucide'));
 fs.copyFileSync(
   path.join(source, "icons", "icon-48.png"),
   path.join(__dirname, "ui", "icons", "icon-48.png"),

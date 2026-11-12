@@ -52,3 +52,5 @@ desktop/ui/structured-fields.js
 desktop/ui/profile-editor.css
 
 desktop/ui/metrics.js
+desktop/ui/icons/*.svg
+desktop/ui/icons/LICENSE.lucide

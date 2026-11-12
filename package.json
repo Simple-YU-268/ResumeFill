@@ -1,6 +1,6 @@
 {
   "name": "resumefill-agent",
-  "version": "0.27.1",
+  "version": "0.28.0",
   "private": true,
   "description": "Local-first resume autofill agent and Windows desktop manager",
   "license": "MIT",
@@ -11,7 +11,7 @@
     "test": "node scripts/test.cjs",
     "test:browser": "node scripts/test.cjs --browser",
     "test:desktop": "npm --prefix desktop test && node desktop/extension-test.cjs && node desktop/auto-pair-browser-test.cjs && node desktop/profile-sync-browser-test.cjs && node desktop/attachment-browser-test.cjs",
-    "test:electron": "node desktop/ui-test.cjs && node desktop/pdf-test.cjs && node desktop/auth-ui-test.cjs && node desktop/updater-ui-test.cjs",
+    "test:electron": "node desktop/ui-test.cjs && node desktop/browser-ui-test.cjs && node desktop/pdf-test.cjs && node desktop/auth-ui-test.cjs && node desktop/updater-ui-test.cjs",
     "test:all": "npm test && npm run test:browser && npm run test:desktop && npm run test:electron",
     "privacy": "node scripts/check-public-package.cjs",
     "privacy:artifacts": "node scripts/check-public-package.cjs --artifacts",
@@ -23,6 +23,7 @@
     "format:check": "prettier --check desktop/controller.cjs desktop/main.cjs popup.js content.js controls.js"
   },
   "devDependencies": {
+    "lucide-static": "1.71.0",
     "playwright": "1.58.2",
     "prettier": "3.6.2"
   }
