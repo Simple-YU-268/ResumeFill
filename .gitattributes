@@ -1,0 +1,6 @@
+# Match Prettier's LF output on Windows checkouts as well as local builds.
+/desktop/controller.cjs text eol=lf
+/desktop/main.cjs text eol=lf
+/popup.js text eol=lf
+/content.js text eol=lf
+/controls.js text eol=lf
