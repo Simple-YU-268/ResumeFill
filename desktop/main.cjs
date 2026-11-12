@@ -28,7 +28,8 @@ function setupUpdater() {
     },
     beforeInstall: async () => {
       if (pdfBusy) throw Error("PDF 正在处理中，请完成后再更新");
-      if (browserWorkspace?.engine.busy) throw Error("网站工作区正在填写，请先停止操作");
+      if (browserWorkspace?.engine.busy)
+        throw Error("网站工作区正在填写，请先停止操作");
       if (
         controller
           .status()
@@ -73,8 +74,14 @@ else {
           browserWorkspace.window.show();
           browserWorkspace.window.focus();
         } else {
-          browserWorkspace = require('./browser-host.cjs').createBrowserWorkspace(controller, runtime);
-          browserWorkspace.window.on('closed', () => { browserWorkspace = null; });
+          browserWorkspace =
+            require("./browser-host.cjs").createBrowserWorkspace(
+              controller,
+              runtime,
+            );
+          browserWorkspace.window.on("closed", () => {
+            browserWorkspace = null;
+          });
         }
         return true;
       },
@@ -84,7 +91,9 @@ else {
           properties: ["openFile"],
           filters: [{ name: "PDF", extensions: ["pdf"] }],
         });
-        return selected.canceled ? null : controller.saveResumeAttachment(selected.filePaths[0]);
+        return selected.canceled
+          ? null
+          : controller.saveResumeAttachment(selected.filePaths[0]);
       },
       removeResumeAttachment: () => controller.removeResumeAttachment(),
       openRelease: () =>

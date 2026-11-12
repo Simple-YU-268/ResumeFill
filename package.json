@@ -1,6 +1,6 @@
 {
   "name": "resumefill-agent",
-  "version": "0.29.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Local-first resume autofill agent and Windows desktop manager",
   "license": "MIT",

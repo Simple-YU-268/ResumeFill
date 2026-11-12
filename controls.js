@@ -59,8 +59,14 @@
   }
   function guard(d) {
     d.platformGuard?.();
-    if (d.config?.phoenixSelect && (d.el.querySelector('input')?.disabled || d.el.matches('[aria-multiselectable="true"],.phoenix-select--multiple,.phoenix-select--multi')))
-      throw Error('此北森下拉需在网页上手动核对');
+    if (
+      d.config?.phoenixSelect &&
+      (d.el.querySelector("input")?.disabled ||
+        d.el.matches(
+          '[aria-multiselectable="true"],.phoenix-select--multiple,.phoenix-select--multi',
+        ))
+    )
+      throw Error("此北森下拉需在网页上手动核对");
     refreshLayui(d);
     if (
       (d.config?.elementSelect || d.config?.elementCascader) &&
@@ -237,13 +243,18 @@
     let event;
     try {
       event = new win.InputEvent("input", {
-        bubbles: true, composed: true, inputType: "insertText", data: String(value),
+        bubbles: true,
+        composed: true,
+        inputType: "insertText",
+        data: String(value),
       });
     } catch {
       event = new win.Event("input", { bubbles: true, composed: true });
     }
     el.dispatchEvent(event);
-    el.dispatchEvent(new win.Event("change", { bubbles: true, composed: true }));
+    el.dispatchEvent(
+      new win.Event("change", { bubbles: true, composed: true }),
+    );
   }
   function options(d, selector) {
     const menu = associatedMenu(d);
@@ -435,9 +446,9 @@
   function read(d) {
     refreshLayui(d);
     if (d.config?.phoenixSelect) {
-      if (d.el.querySelector('.phoenix-select__placeHolder--show')) return '';
-      const selected = list(d.el, '.phoenix-select__selection');
-      return selected.length === 1 ? selected[0].innerText.trim() : '';
+      if (d.el.querySelector(".phoenix-select__placeHolder--show")) return "";
+      const selected = list(d.el, ".phoenix-select__selection");
+      return selected.length === 1 ? selected[0].innerText.trim() : "";
     }
     if (d.config?.mokaSelect) {
       const selected = d.el.querySelector('[class*="sd-Input-display-value-"]');
@@ -1169,12 +1180,14 @@
           associatedMenu(d);
         if (!alreadyOpen || alreadyOpen.getAttribute("aria-busy") === "true") {
           const trigger =
-            d.config?.mokaSelect || d.config?.elementSelect || d.config?.phoenixSelect
+            d.config?.mokaSelect ||
+            d.config?.elementSelect ||
+            d.config?.phoenixSelect
               ? d.el.querySelector("input")
               : d.el;
           if (!trigger) throw Error("下拉触发控件不存在");
           trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-          trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+          trigger.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
           trigger.click();
         }
         const search = d.config?.searchInputSelector
@@ -1184,7 +1197,12 @@
             : list(d.el, "input");
         if (search.length > 1) throw Error("搜索输入框不唯一");
         // Fixed Moka selects expose writable inputs too: prefer actual options.
-        if (search[0] && !search[0].readOnly && !d.config?.mokaSelect && !d.config?.phoenixSelect)
+        if (
+          search[0] &&
+          !search[0].readOnly &&
+          !d.config?.mokaSelect &&
+          !d.config?.phoenixSelect
+        )
           setValue(search[0], String(value));
         let stamp = "",
           since = 0;
@@ -1192,8 +1210,15 @@
           guard(d);
           return options(d, d.config?.optionsSelector).length;
         });
-        if (d.config?.phoenixSelect && (d.menu?.matches('.phoenix-selectList--showFooter') || list(d.menu, '.selector-footer-button,.phoenix-button,button,[role="button"]').length))
-          throw Error('此北森下拉需要额外确认，请在网页手动选择');
+        if (
+          d.config?.phoenixSelect &&
+          (d.menu?.matches(".phoenix-selectList--showFooter") ||
+            list(
+              d.menu,
+              '.selector-footer-button,.phoenix-button,button,[role="button"]',
+            ).length)
+        )
+          throw Error("此北森下拉需要额外确认，请在网页手动选择");
         if (
           d.config?.mokaSelect &&
           search[0] &&

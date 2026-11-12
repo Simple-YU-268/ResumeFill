@@ -124,176 +124,320 @@ const courierTitle = document.createElement("summary");
 courierTitle.textContent = "投递任务";
 const companyInput = document.createElement("input");
 companyInput.placeholder = "公司名称";
-companyInput.setAttribute("aria-label","投递任务公司名称");
+companyInput.setAttribute("aria-label", "投递任务公司名称");
 const courierStatus = document.createElement("p");
 courierStatus.id = "courierStatus";
-courierStatus.setAttribute("role","status");
+courierStatus.setAttribute("role", "status");
 const courierList = document.createElement("div");
-courierPanel.append(courierTitle,companyInput,courierStatus,courierList);
-const jobTitleInput=document.createElement('input');
-jobTitleInput.placeholder='职位名称';
-jobTitleInput.maxLength=500;
-jobTitleInput.setAttribute('aria-label','投递任务职位名称');
-companyInput.maxLength=200;
-const screeningControls={};
-const screeningForm=document.createElement('div');
-screeningForm.className='courier-screening';
-screeningForm.append(companyInput,jobTitleInput);
-let screeningRevision=0;
-const screeningConfirmation=document.createElement('input');
-screeningConfirmation.type='checkbox';
-const confirmationLabel=document.createElement('label');
-confirmationLabel.className='courier-confirmation';
-confirmationLabel.append(screeningConfirmation,document.createTextNode('我已核对未确定的职位条件'));
-for(const [name,label,options] of [
-  ['availability','职位开放状态',[['unknown','尚未确定'],['open','正在招聘'],['closed','已关闭']]],
-  ['scope','职位范围',[['unknown','尚未确定'],['in-scope','在求职范围内'],['out-of-scope','超出求职范围']]],
-  ['eligibility','职位资格',[['unknown','尚未确定'],['eligible','符合资格'],['ineligible','不符合资格']]],
-]){
- const control=document.createElement('select'),container=document.createElement('label');
- control.setAttribute('aria-label',label);
- for(const [value,text] of options){const option=document.createElement('option');option.value=value;option.textContent=text;control.append(option);}
- container.append(document.createTextNode(label),control);
- screeningControls[name]=control;
- screeningForm.append(container);
+courierPanel.append(courierTitle, companyInput, courierStatus, courierList);
+const jobTitleInput = document.createElement("input");
+jobTitleInput.placeholder = "职位名称";
+jobTitleInput.maxLength = 500;
+jobTitleInput.setAttribute("aria-label", "投递任务职位名称");
+companyInput.maxLength = 200;
+const screeningControls = {};
+const screeningForm = document.createElement("div");
+screeningForm.className = "courier-screening";
+screeningForm.append(companyInput, jobTitleInput);
+let screeningRevision = 0;
+const screeningConfirmation = document.createElement("input");
+screeningConfirmation.type = "checkbox";
+const confirmationLabel = document.createElement("label");
+confirmationLabel.className = "courier-confirmation";
+confirmationLabel.append(
+  screeningConfirmation,
+  document.createTextNode("我已核对未确定的职位条件"),
+);
+for (const [name, label, options] of [
+  [
+    "availability",
+    "职位开放状态",
+    [
+      ["unknown", "尚未确定"],
+      ["open", "正在招聘"],
+      ["closed", "已关闭"],
+    ],
+  ],
+  [
+    "scope",
+    "职位范围",
+    [
+      ["unknown", "尚未确定"],
+      ["in-scope", "在求职范围内"],
+      ["out-of-scope", "超出求职范围"],
+    ],
+  ],
+  [
+    "eligibility",
+    "职位资格",
+    [
+      ["unknown", "尚未确定"],
+      ["eligible", "符合资格"],
+      ["ineligible", "不符合资格"],
+    ],
+  ],
+]) {
+  const control = document.createElement("select"),
+    container = document.createElement("label");
+  control.setAttribute("aria-label", label);
+  for (const [value, text] of options) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    control.append(option);
+  }
+  container.append(document.createTextNode(label), control);
+  screeningControls[name] = control;
+  screeningForm.append(container);
 }
-for(const control of [companyInput,jobTitleInput,...Object.values(screeningControls)])control.addEventListener('input',()=>{
- screeningConfirmation.checked=false;screeningRevision++;
-});
-screeningConfirmation.addEventListener('change',()=>screeningRevision++);
-courierStatus.before(screeningForm,confirmationLabel);
-const screeningReasons={closed:'职位已关闭','out-of-scope':'超出求职范围',ineligible:'不符合职位资格',duplicate:'职位已在队列中','company-quota':'该公司已有任务',
- 'excluded-keyword':'命中排除关键词','outside-keywords':'不在期望关键词范围内','title-unknown':'职位名称尚未确定',
- 'availability-unknown':'开放状态尚未确定','scope-unknown':'职位范围尚未确定','eligibility-unknown':'职位资格尚未确定'};
+for (const control of [
+  companyInput,
+  jobTitleInput,
+  ...Object.values(screeningControls),
+])
+  control.addEventListener("input", () => {
+    screeningConfirmation.checked = false;
+    screeningRevision++;
+  });
+screeningConfirmation.addEventListener("change", () => screeningRevision++);
+courierStatus.before(screeningForm, confirmationLabel);
+const screeningReasons = {
+  closed: "职位已关闭",
+  "out-of-scope": "超出求职范围",
+  ineligible: "不符合职位资格",
+  duplicate: "职位已在队列中",
+  "company-quota": "该公司已有任务",
+  "excluded-keyword": "命中排除关键词",
+  "outside-keywords": "不在期望关键词范围内",
+  "title-unknown": "职位名称尚未确定",
+  "availability-unknown": "开放状态尚未确定",
+  "scope-unknown": "职位范围尚未确定",
+  "eligibility-unknown": "职位资格尚未确定",
+};
 $("resultCard").before(courierPanel);
 let currentApplication;
-async function courier(action,extra={}) {
-  const result=await chrome.runtime.sendMessage({type:"RF_RUN_COURIER",action,...extra});
-  if(result?.error)throw Error(result.error);
+async function courier(action, extra = {}) {
+  const result = await chrome.runtime.sendMessage({
+    type: "RF_RUN_COURIER",
+    action,
+    ...extra,
+  });
+  if (result?.error) throw Error(result.error);
   return result;
 }
 async function refreshCourier() {
   courierList.replaceChildren();
-  for(const run of await courier("list")) {
-    const line=document.createElement("p");
-    const states={queued:"待填写",running:"填写中",handoff:"等待手动提交",blocked:"受阻",failed:"失败",submitted:"已确认投递",skipped:"已跳过"};
-    line.textContent=run.origin+" · "+states[run.status];
-    if(run.status==="queued"||run.status==="handoff") {
-      const choose=document.createElement("button");
-      choose.textContent=run.status==="queued"?"使用此任务":"我已在网页提交";
-      choose.onclick=async()=>{
+  for (const run of await courier("list")) {
+    const line = document.createElement("p");
+    const states = {
+      queued: "待填写",
+      running: "填写中",
+      handoff: "等待手动提交",
+      blocked: "受阻",
+      failed: "失败",
+      submitted: "已确认投递",
+      skipped: "已跳过",
+    };
+    line.textContent = run.origin + " · " + states[run.status];
+    if (run.status === "queued" || run.status === "handoff") {
+      const choose = document.createElement("button");
+      choose.textContent =
+        run.status === "queued" ? "使用此任务" : "我已在网页提交";
+      choose.onclick = async () => {
         try {
-          if(!snapshot||new URL(snapshot.url).origin!==run.origin)throw Error("请先扫描任务对应网站");
-          if(run.status==="handoff")await courier("transition",{id:run.id,status:"submitted",detail:{confirmedByUser:true}});
+          if (!snapshot || new URL(snapshot.url).origin !== run.origin)
+            throw Error("请先扫描任务对应网站");
+          if (run.status === "handoff")
+            await courier("transition", {
+              id: run.id,
+              status: "submitted",
+              detail: { confirmedByUser: true },
+            });
           else {
-            if(!run.screened&&!screeningConfirmation.checked)throw Error('旧任务需要核对职位条件，请勾选确认后再使用');
-            currentApplication=run.id;
+            if (!run.screened && !screeningConfirmation.checked)
+              throw Error("旧任务需要核对职位条件，请勾选确认后再使用");
+            currentApplication = run.id;
           }
-          courierStatus.textContent=run.status==="handoff"?"已记录用户确认":"任务已选中";
+          courierStatus.textContent =
+            run.status === "handoff" ? "已记录用户确认" : "任务已选中";
           await refreshCourier();
-        }catch(error){courierStatus.textContent=error.message;}
+        } catch (error) {
+          courierStatus.textContent = error.message;
+        }
       };
       line.append(choose);
     }
-    const command=(label,action,extra)=>{
-      const button=document.createElement("button");
-      button.type="button";
-      button.textContent=label;
-      button.onclick=async()=>{
-        button.disabled=true;
+    const command = (label, action, extra) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.onclick = async () => {
+        button.disabled = true;
         try {
-          await courier(action,{id:run.id,...extra});
-          if(currentApplication===run.id)currentApplication=null;
+          await courier(action, { id: run.id, ...extra });
+          if (currentApplication === run.id) currentApplication = null;
           await refreshCourier();
-          courierStatus.textContent="任务已更新";
-        } catch(error){courierStatus.textContent=error.message;button.disabled=false;}
+          courierStatus.textContent = "任务已更新";
+        } catch (error) {
+          courierStatus.textContent = error.message;
+          button.disabled = false;
+        }
       };
       line.append(button);
     };
-    if(["blocked","failed"].includes(run.status))command("重新排队","transition",{status:"queued"});
-    if(run.status==="running")command("恢复中断任务","recover",{});
-    if(["queued","handoff","blocked","failed"].includes(run.status))command("跳过","transition",{status:"skipped"});
+    if (["blocked", "failed"].includes(run.status))
+      command("重新排队", "transition", { status: "queued" });
+    if (run.status === "running") command("恢复中断任务", "recover", {});
+    if (["queued", "handoff", "blocked", "failed"].includes(run.status))
+      command("跳过", "transition", { status: "skipped" });
     courierList.append(line);
   }
 }
-const enqueueApplication=document.createElement("button");
-enqueueApplication.textContent="检查并加入任务";
-enqueueApplication.onclick=async()=>{
-  enqueueApplication.disabled=true;
+const enqueueApplication = document.createElement("button");
+enqueueApplication.textContent = "检查并加入任务";
+enqueueApplication.onclick = async () => {
+  enqueueApplication.disabled = true;
   try {
-    if(!snapshot)throw Error("请先扫描当前表单");
-    const page=snapshot,revision=screeningRevision;
-    const company=companyInput.value.normalize("NFKC").trim().toLowerCase();
-    if(!company)throw Error("请填写公司名称");
-    const screening={title:jobTitleInput.value.trim(),...Object.fromEntries(Object.entries(screeningControls).map(([name,control])=>[name,control.value]))};
-    const confirmedByUser=screeningConfirmation.checked;
-    const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(company));
-    const companyKey=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,"0")).join("");
-    const id=crypto.randomUUID();
-    const job={id,companyKey,origin:new URL(page.url).origin,screening,confirmedByUser};
-    const decision=await courier('screen',{job});
-    if(page!==snapshot||revision!==screeningRevision)throw Error('职位条件或表单已变化，请重新检查');
-    const reasons=decision.reasons.map(reason=>screeningReasons[reason]||'请核对职位条件').join('；');
-    if(decision.action==='skip'||decision.action==='block')throw Error(reasons);
-    if(decision.action==='review'&&!confirmedByUser)throw Error('需要核对：'+reasons);
-    await courier("enqueue",{job});
-    currentApplication=id;
-    companyInput.value="";
-    jobTitleInput.value='';
-    screeningConfirmation.checked=false;
-    for(const control of Object.values(screeningControls))control.value='unknown';
+    if (!snapshot) throw Error("请先扫描当前表单");
+    const page = snapshot,
+      revision = screeningRevision;
+    const company = companyInput.value.normalize("NFKC").trim().toLowerCase();
+    if (!company) throw Error("请填写公司名称");
+    const screening = {
+      title: jobTitleInput.value.trim(),
+      ...Object.fromEntries(
+        Object.entries(screeningControls).map(([name, control]) => [
+          name,
+          control.value,
+        ]),
+      ),
+    };
+    const confirmedByUser = screeningConfirmation.checked;
+    const bytes = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(company),
+    );
+    const companyKey = Array.from(new Uint8Array(bytes), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    const id = crypto.randomUUID();
+    const job = {
+      id,
+      companyKey,
+      origin: new URL(page.url).origin,
+      screening,
+      confirmedByUser,
+    };
+    const decision = await courier("screen", { job });
+    if (page !== snapshot || revision !== screeningRevision)
+      throw Error("职位条件或表单已变化，请重新检查");
+    const reasons = decision.reasons
+      .map((reason) => screeningReasons[reason] || "请核对职位条件")
+      .join("；");
+    if (decision.action === "skip" || decision.action === "block")
+      throw Error(reasons);
+    if (decision.action === "review" && !confirmedByUser)
+      throw Error("需要核对：" + reasons);
+    await courier("enqueue", { job });
+    currentApplication = id;
+    companyInput.value = "";
+    jobTitleInput.value = "";
+    screeningConfirmation.checked = false;
+    for (const control of Object.values(screeningControls))
+      control.value = "unknown";
     screeningRevision++;
-    courierStatus.textContent="任务已加入";
+    courierStatus.textContent = "任务已加入";
     await refreshCourier();
-  }catch(error){courierStatus.textContent=error.message;}
-  finally{enqueueApplication.disabled=false;}
+  } catch (error) {
+    courierStatus.textContent = error.message;
+  } finally {
+    enqueueApplication.disabled = false;
+  }
 };
 courierPanel.append(enqueueApplication);
-const screeningRules=document.createElement('fieldset');
-const screeningLegend=document.createElement('legend');
-screeningLegend.textContent='职位关键词筛选';
+const screeningRules = document.createElement("fieldset");
+const screeningLegend = document.createElement("legend");
+screeningLegend.textContent = "职位关键词筛选";
 screeningRules.append(screeningLegend);
-const ruleInputs={};
-for(const [name,text] of [['includeKeywords','期望关键词'],['excludeKeywords','排除关键词']]){
- const label=document.createElement('label'),input=document.createElement('input');
- input.setAttribute('aria-label',text);input.placeholder='Java, 后端';input.maxLength=3050;
- label.append(document.createTextNode(text),input);screeningRules.append(label);ruleInputs[name]=input;
- input.addEventListener('input',()=>{screeningConfirmation.checked=false;screeningRevision++;});
+const ruleInputs = {};
+for (const [name, text] of [
+  ["includeKeywords", "期望关键词"],
+  ["excludeKeywords", "排除关键词"],
+]) {
+  const label = document.createElement("label"),
+    input = document.createElement("input");
+  input.setAttribute("aria-label", text);
+  input.placeholder = "Java, 后端";
+  input.maxLength = 3050;
+  label.append(document.createTextNode(text), input);
+  screeningRules.append(label);
+  ruleInputs[name] = input;
+  input.addEventListener("input", () => {
+    screeningConfirmation.checked = false;
+    screeningRevision++;
+  });
 }
-const saveScreeningRules=document.createElement('button');
-saveScreeningRules.type='button';saveScreeningRules.textContent='保存职位筛选';
-saveScreeningRules.onclick=async()=>{
- saveScreeningRules.disabled=true;
- try{
-  const rules=Object.fromEntries(Object.entries(ruleInputs).map(([name,input])=>[name,input.value.split(/[,，;；\n]/).map(word=>word.trim()).filter(Boolean)]));
-  const normalized=await courier('saveRules',{rules});
-  for(const [name,input] of Object.entries(ruleInputs))input.value=normalized[name].join(', ');
-  screeningConfirmation.checked=false;screeningRevision++;
-  courierStatus.textContent='筛选规则已保存';
- }catch(error){courierStatus.textContent=error.message;}
- finally{saveScreeningRules.disabled=false;}
-};
-screeningRules.append(saveScreeningRules);courierPanel.append(screeningRules);
-const exportApplications=document.createElement("button");
-exportApplications.type="button";
-exportApplications.textContent="导出任务回执";
-exportApplications.onclick=async()=>{
+const saveScreeningRules = document.createElement("button");
+saveScreeningRules.type = "button";
+saveScreeningRules.textContent = "保存职位筛选";
+saveScreeningRules.onclick = async () => {
+  saveScreeningRules.disabled = true;
   try {
-    const receipt=await courier("export");
-    const url=URL.createObjectURL(new Blob([JSON.stringify(receipt,null,2)],{type:"application/json"}));
-    const link=document.createElement("a");
-    link.href=url;
-    link.download="application-progress.json";
+    const rules = Object.fromEntries(
+      Object.entries(ruleInputs).map(([name, input]) => [
+        name,
+        input.value
+          .split(/[,，;；\n]/)
+          .map((word) => word.trim())
+          .filter(Boolean),
+      ]),
+    );
+    const normalized = await courier("saveRules", { rules });
+    for (const [name, input] of Object.entries(ruleInputs))
+      input.value = normalized[name].join(", ");
+    screeningConfirmation.checked = false;
+    screeningRevision++;
+    courierStatus.textContent = "筛选规则已保存";
+  } catch (error) {
+    courierStatus.textContent = error.message;
+  } finally {
+    saveScreeningRules.disabled = false;
+  }
+};
+screeningRules.append(saveScreeningRules);
+courierPanel.append(screeningRules);
+const exportApplications = document.createElement("button");
+exportApplications.type = "button";
+exportApplications.textContent = "导出任务回执";
+exportApplications.onclick = async () => {
+  try {
+    const receipt = await courier("export");
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(receipt, null, 2)], {
+        type: "application/json",
+      }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "application-progress.json";
     link.click();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-  }catch(error){courierStatus.textContent=error.message;}
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    courierStatus.textContent = error.message;
+  }
 };
 courierPanel.append(exportApplications);
-courierPanel.addEventListener("toggle",()=>{if(courierPanel.open)(async()=>{
-  const rules=await courier('rules');
-  for(const [name,input] of Object.entries(ruleInputs))input.value=rules[name].join(', ');
-  await refreshCourier();
- })().catch(error=>{courierStatus.textContent=error.message;});});
+courierPanel.addEventListener("toggle", () => {
+  if (courierPanel.open)
+    (async () => {
+      const rules = await courier("rules");
+      for (const [name, input] of Object.entries(ruleInputs))
+        input.value = rules[name].join(", ");
+      await refreshCourier();
+    })().catch((error) => {
+      courierStatus.textContent = error.message;
+    });
+});
 const attachResume = document.createElement("button");
 attachResume.type = "button";
 attachResume.textContent = "选择已导入的 PDF";
@@ -306,11 +450,25 @@ checkForm.onclick = async () => {
   checkForm.disabled = true;
   try {
     const { issues, candidates } = await send({ type: "RF_RUN_PREFLIGHT" });
-    const reasons = {'invalid':'格式无效','required-empty':'必填未填','challenge':'请人工完成',
-      'semantic-drift':'字段语义已变化','unconfirmed':'填写未确认','readback-changed':'填写后内容已变化'};
+    const reasons = {
+      invalid: "格式无效",
+      "required-empty": "必填未填",
+      challenge: "请人工完成",
+      "semantic-drift": "字段语义已变化",
+      unconfirmed: "填写未确认",
+      "readback-changed": "填写后内容已变化",
+    };
     $("status").textContent = [
-      issues.length ? issues.map(({code,label}) => label + "：" + (reasons[code] || "请核对")).join("；") : "未发现当前可见表单的检查问题",
-      candidates.length ? "请在网页核对：" + candidates.join("、") : "请在网页核对提交位置",
+      issues.length
+        ? issues
+            .map(
+              ({ code, label }) => label + "：" + (reasons[code] || "请核对"),
+            )
+            .join("；")
+        : "未发现当前可见表单的检查问题",
+      candidates.length
+        ? "请在网页核对：" + candidates.join("、")
+        : "请在网页核对提交位置",
     ].join("。");
   } catch (error) {
     $("status").textContent = error.message;
@@ -324,7 +482,10 @@ attachResume.onclick = async () => {
   try {
     if (!snapshot || tabId == null) throw Error("请先扫描当前表单");
     const request = async (sha256) => {
-      const result = await chrome.runtime.sendMessage({type:"RF_DESKTOP_RESUME_ATTACHMENT",sha256});
+      const result = await chrome.runtime.sendMessage({
+        type: "RF_DESKTOP_RESUME_ATTACHMENT",
+        sha256,
+      });
       if (result?.error) throw Error(result.error);
       if (!result) throw Error("请先在桌面端导入投递用 PDF");
       return result;
@@ -332,19 +493,24 @@ attachResume.onclick = async () => {
     if (!attachmentApproval) {
       const page = snapshot;
       const meta = await request();
-      const {token} = await send({type:"RF_RUN_UPLOAD"});
-      attachmentApproval = {page, token, sha256:meta.sha256};
+      const { token } = await send({ type: "RF_RUN_UPLOAD" });
+      attachmentApproval = { page, token, sha256: meta.sha256 };
       attachResume.textContent = "确认附上 PDF";
       $("status").textContent = "待附上：" + meta.fileName;
       return;
     }
-    const {page, token, sha256} = attachmentApproval;
+    const { page, token, sha256 } = attachmentApproval;
     if (snapshot !== page) throw Error("表单已变化，请重新选择附件");
     const file = await request(sha256);
-    if (snapshot !== page || file.sha256 !== sha256 || !file.dataBase64) throw Error("表单或附件已变化，请重新确认");
-    const result = await send({...file,type:"RF_RUN_UPLOAD",token});
+    if (snapshot !== page || file.sha256 !== sha256 || !file.dataBase64)
+      throw Error("表单或附件已变化，请重新确认");
+    const result = await send({ ...file, type: "RF_RUN_UPLOAD", token });
     if (result.rescanRequired) clearPage();
-    $("status").textContent = result.rescanRequired ? "附件可能触发简历解析，请等待网页稳定后重新扫描" : result.selected ? "已选中 PDF，请在网页上核对上传状态" : "无法确认附件状态，请在网页上核对";
+    $("status").textContent = result.rescanRequired
+      ? "附件可能触发简历解析，请等待网页稳定后重新扫描"
+      : result.selected
+        ? "已选中 PDF，请在网页上核对上传状态"
+        : "无法确认附件状态，请在网页上核对";
     attachmentApproval = null;
   } catch (error) {
     attachmentApproval = null;
@@ -359,7 +525,11 @@ async function send(message) {
     throw Error("Agent 正在操作页面，请先停止或等待");
   if (agentNeedsRescan && !["RF_SCAN", "RF_CANCEL"].includes(message.type))
     throw Error("Agent 已更新扫描，请先重新扫描页面");
-  if (["RF_FILL", "RF_PREPARE", "RF_RUN_UPLOAD", "RF_RUN_PREFLIGHT"].includes(message.type)) {
+  if (
+    ["RF_FILL", "RF_PREPARE", "RF_RUN_UPLOAD", "RF_RUN_PREFLIGHT"].includes(
+      message.type,
+    )
+  ) {
     try {
       const [active] = await chrome.tabs.query({
         active: true,
@@ -391,29 +561,47 @@ async function send(message) {
     fillProgressId = message.progressId;
   }
   let applicationId;
-  if(message.type==="RF_FILL"&&currentApplication) {
-    const run=(await courier("list")).find(row=>row.id===currentApplication);
-    if(!run||run.origin!==new URL(snapshot.url).origin)throw Error("投递任务与当前网站不一致");
-    await courier("transition",{id:run.id,status:"running",detail:{confirmedByUser:!run.screened&&screeningConfirmation.checked}});
-    applicationId=run.id;
+  if (message.type === "RF_FILL" && currentApplication) {
+    const run = (await courier("list")).find(
+      (row) => row.id === currentApplication,
+    );
+    if (!run || run.origin !== new URL(snapshot.url).origin)
+      throw Error("投递任务与当前网站不一致");
+    await courier("transition", {
+      id: run.id,
+      status: "running",
+      detail: {
+        confirmedByUser: !run.screened && screeningConfirmation.checked,
+      },
+    });
+    applicationId = run.id;
   }
   try {
     const result = await (message.type === "RF_SCAN"
       ? ResumePageBridge.scan(tabId, message)
       : ResumePageBridge.send(tabId, message));
     if (result?.error) throw Error(result.error);
-    if(applicationId) {
-      const verified=(result.results||[]).filter(row=>row.status==="verified").length;
-      const failed=(result.results||[]).length-verified;
-      await courier("transition",{id:applicationId,status:failed?"blocked":"handoff",detail:{verified,failed}});
-      currentApplication=null;
+    if (applicationId) {
+      const verified = (result.results || []).filter(
+        (row) => row.status === "verified",
+      ).length;
+      const failed = (result.results || []).length - verified;
+      await courier("transition", {
+        id: applicationId,
+        status: failed ? "blocked" : "handoff",
+        detail: { verified, failed },
+      });
+      currentApplication = null;
       await refreshCourier();
     }
     return result;
   } catch (e) {
-    if(applicationId) {
-      await courier("transition",{id:applicationId,status:"failed"}).catch(()=>{});
-      currentApplication=null;
+    if (applicationId) {
+      await courier("transition", {
+        id: applicationId,
+        status: "failed",
+      }).catch(() => {});
+      currentApplication = null;
     }
     if (e.code === "RF_PAGE_RUNTIME_STALE") clearPage();
     throw e;
@@ -604,7 +792,10 @@ async function scan(incremental = false, learning = false) {
       (field.path
         ? { path: field.path }
         : decision.action === "fill"
-          ? { path: decision.sourcePath, score: decision.confidence >= .98 ? 100 : 78 }
+          ? {
+              path: decision.sourcePath,
+              score: decision.confidence >= 0.98 ? 100 : 78,
+            }
           : null);
     if (guess?.path && !Object.hasOwn(values, guess.path))
       values[guess.path] = "";
@@ -618,12 +809,19 @@ async function scan(incremental = false, learning = false) {
       old.section === field.section &&
       old.index === field.recordIndex;
     const key = ruleField(field);
-    let chosen = decision.action === "block" ? "" : same
-        ? old.path
-        : Object.hasOwn(rules, key)
-          ? rules[key]
-          : guess?.path || "";
-    if (ResumeMatcher.fieldPolicy(resume,chosen) === 'review' && !(same && old.touched)) chosen = "";
+    let chosen =
+      decision.action === "block"
+        ? ""
+        : same
+          ? old.path
+          : Object.hasOwn(rules, key)
+            ? rules[key]
+            : guess?.path || "";
+    if (
+      ResumeMatcher.fieldPolicy(resume, chosen) === "review" &&
+      !(same && old.touched)
+    )
+      chosen = "";
     const row = document.createElement("div");
     row.className = "row";
     const left = document.createElement("div");
@@ -676,9 +874,11 @@ async function scan(incremental = false, learning = false) {
       select,
       key,
       small,
-      aiLocked: decision.reason === '资料策略要求逐项核对' || (same
-        ? old.aiLocked
-        : !!savedAnswer || !!field.path || Object.hasOwn(rules, key)),
+      aiLocked:
+        decision.reason === "资料策略要求逐项核对" ||
+        (same
+          ? old.aiLocked
+          : !!savedAnswer || !!field.path || Object.hasOwn(rules, key)),
       touched: !!(same && old.touched),
       aiReview: same
         ? old.aiReview
@@ -692,10 +892,19 @@ async function scan(incremental = false, learning = false) {
       row,
     };
     const update = () => {
-      matchStatus.textContent = decision.action === "block" ? "已阻止" : select.value ? "已匹配" :
-        decision.action === "review" ? "待核对" : "未匹配";
+      matchStatus.textContent =
+        decision.action === "block"
+          ? "已阻止"
+          : select.value
+            ? "已匹配"
+            : decision.action === "review"
+              ? "待核对"
+              : "未匹配";
       preview.value = values[select.value] || "";
-      draft.hidden = !!preview.value || decision.action === "block" || ResumeAnswers.protectedField(field);
+      draft.hidden =
+        !!preview.value ||
+        decision.action === "block" ||
+        ResumeAnswers.protectedField(field);
       draft.placeholder = select.value
         ? `已识别 ${pathLabel(select.value)}，尚无资料；请补充或检查桌面资料更新`
         : field.ambiguousLabel
@@ -1143,7 +1352,11 @@ $("fill").onclick = () =>
               `${s.section} 第 ${s.index + 1} 条：${s.status === "save_indicator_observed" ? "已观察到页面保存标识" : s.error}`,
           )
           .join("\n") +
-        (response.adaptation?.requiresReview ? "\n发现新增字段 "+response.adaptation.newFields.length+" 项，请扫描新增字段并核对。" : "") +
+        (response.adaptation?.requiresReview
+          ? "\n发现新增字段 " +
+            response.adaptation.newFields.length +
+            " 项，请扫描新增字段并核对。"
+          : "") +
         (response.adaptation?.timedOut ? "\n页面仍在变化，请稍后重扫。" : "") +
         "\n请核对网页；未检查其他分页或服务器保存状态。",
     );
@@ -1454,7 +1667,7 @@ function applyAISuggestions(matches, automatic = false) {
       r &&
       ResumeAI.reviewable(r, values) &&
       ResumeMatcher.allowedPath(r.field, m.path) &&
-      (!automatic || ResumeMatcher.fieldPolicy(resume,m.path) === 'auto') &&
+      (!automatic || ResumeMatcher.fieldPolicy(resume, m.path) === "auto") &&
       values[m.path]
     ) {
       r.select.value = m.path;

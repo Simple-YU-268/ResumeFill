@@ -18,14 +18,23 @@ class Controller {
     this.audit = [];
     this.applicationClients = {};
     try {
-      const stored = JSON.parse(fs.readFileSync(path.join(directory,'application-progress.json'),'utf8'));
-      if (!stored || Object.keys(stored).length > 10) throw Error('Invalid application clients');
-      const courier = require(path.join(this.runtime,'courier.js'));
-      for (const [key,value] of Object.entries(stored)) {
-        if (!/^[a-f0-9]{64}$/.test(key)) throw Error('Invalid application client');
+      const stored = JSON.parse(
+        fs.readFileSync(
+          path.join(directory, "application-progress.json"),
+          "utf8",
+        ),
+      );
+      if (!stored || Object.keys(stored).length > 10)
+        throw Error("Invalid application clients");
+      const courier = require(path.join(this.runtime, "courier.js"));
+      for (const [key, value] of Object.entries(stored)) {
+        if (!/^[a-f0-9]{64}$/.test(key))
+          throw Error("Invalid application client");
         this.applicationClients[key] = courier.validateReceipts(value);
       }
-    } catch { this.applicationClients = {}; }
+    } catch {
+      this.applicationClients = {};
+    }
     this.statistics = {
       totals: require("./statistics.cjs").empty(),
       clients: {},
@@ -194,54 +203,76 @@ class Controller {
   }
   saveResumeAttachment(file) {
     const limit = 15 * 1024 * 1024;
-    const fd = fs.openSync(file, 'r');
+    const fd = fs.openSync(file, "r");
     let bytes;
     try {
       const stat = fs.fstatSync(fd);
       if (!stat.isFile() || stat.size < 8 || stat.size > limit)
-        throw Error('PDF must be a file of at most 15 MiB');
+        throw Error("PDF must be a file of at most 15 MiB");
       bytes = Buffer.alloc(stat.size);
-      if (fs.readSync(fd, bytes, 0, bytes.length, 0) !== bytes.length ||
-          fs.fstatSync(fd).size !== bytes.length ||
-          bytes.subarray(0, 5).toString('ascii') !== '%PDF-')
-        throw Error('Invalid or changed PDF file');
+      if (
+        fs.readSync(fd, bytes, 0, bytes.length, 0) !== bytes.length ||
+        fs.fstatSync(fd).size !== bytes.length ||
+        bytes.subarray(0, 5).toString("ascii") !== "%PDF-"
+      )
+        throw Error("Invalid or changed PDF file");
     } finally {
       fs.closeSync(fd);
     }
-    const metadata = { fileName: path.basename(file), size: bytes.length,
-      mime: 'application/pdf', sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
-    this.write(path.join(this.directory, 'resume-attachment.json'),
-      { ...metadata, dataBase64: bytes.toString('base64') });
+    const metadata = {
+      fileName: path.basename(file),
+      size: bytes.length,
+      mime: "application/pdf",
+      sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+    };
+    this.write(path.join(this.directory, "resume-attachment.json"), {
+      ...metadata,
+      dataBase64: bytes.toString("base64"),
+    });
     return metadata;
   }
   resumeAttachment() {
     try {
-      return JSON.parse(fs.readFileSync(path.join(this.directory, 'resume-attachment.json'), 'utf8'));
+      return JSON.parse(
+        fs.readFileSync(
+          path.join(this.directory, "resume-attachment.json"),
+          "utf8",
+        ),
+      );
     } catch (error) {
-      if (error.code === 'ENOENT') return null;
+      if (error.code === "ENOENT") return null;
       throw error;
     }
   }
   removeResumeAttachment() {
-    fs.rmSync(path.join(this.directory, 'resume-attachment.json'), { force: true });
+    fs.rmSync(path.join(this.directory, "resume-attachment.json"), {
+      force: true,
+    });
   }
   resumeAttachmentMetadata() {
     const attachment = this.resumeAttachment();
     if (!attachment) return null;
-    const {fileName,size,mime,sha256} = attachment;
-    return {fileName,size,mime,sha256};
+    const { fileName, size, mime, sha256 } = attachment;
+    return { fileName, size, mime, sha256 };
   }
-  saveApplicationProgress(clientId,input) {
-    if (typeof clientId !== 'string' || !/^[-\w]{1,80}$/.test(clientId)) throw Error('Invalid application client');
-    const courier = require(path.join(this.runtime,'courier.js'));
+  saveApplicationProgress(clientId, input) {
+    if (typeof clientId !== "string" || !/^[-\w]{1,80}$/.test(clientId))
+      throw Error("Invalid application client");
+    const courier = require(path.join(this.runtime, "courier.js"));
     const value = courier.validateReceipts(input);
-    const key = crypto.createHash('sha256').update(clientId).digest('hex');
+    const key = crypto.createHash("sha256").update(clientId).digest("hex");
     const previous = this.applicationClients[key];
-    if (Number.isSafeInteger(previous?.revision) && (!Number.isSafeInteger(value.revision) || value.revision <= previous.revision)) return;
-    if (JSON.stringify(this.applicationClients[key]) === JSON.stringify(value)) return;
-    const next = {...this.applicationClients,[key]:value};
+    if (
+      Number.isSafeInteger(previous?.revision) &&
+      (!Number.isSafeInteger(value.revision) ||
+        value.revision <= previous.revision)
+    )
+      return;
+    if (JSON.stringify(this.applicationClients[key]) === JSON.stringify(value))
+      return;
+    const next = { ...this.applicationClients, [key]: value };
     while (Object.keys(next).length > 10) delete next[Object.keys(next)[0]];
-    this.write(path.join(this.directory,'application-progress.json'),next);
+    this.write(path.join(this.directory, "application-progress.json"), next);
     this.applicationClients = next;
   }
   profile() {
@@ -345,7 +376,8 @@ class Controller {
             !/^[-\w]{1,80}$/.test(input.clientId)
           )
             throw Error("客户端无效");
-          if (input.applications) this.saveApplicationProgress(input.clientId,input.applications);
+          if (input.applications)
+            this.saveApplicationProgress(input.clientId, input.applications);
           if (input.metrics) {
             const key = crypto
               .createHash("sha256")
@@ -406,8 +438,11 @@ class Controller {
   }
   status() {
     return {
-      applications: Object.entries(this.applicationClients).flatMap(([clientKey,value]) =>
-        value.applications.map(row => ({...row,clientKey}))).sort((a,b) => b.updatedAt-a.updatedAt),
+      applications: Object.entries(this.applicationClients)
+        .flatMap(([clientKey, value]) =>
+          value.applications.map((row) => ({ ...row, clientKey })),
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt),
       statistics: this.statistics.totals,
       configRecovered: !!this.configRecovered,
       startupError: this.startupError || null,

@@ -467,7 +467,8 @@
     if (platformContext) {
       const { workModuleAnchor, ...context } = platformContext;
       if (workModuleAnchor) {
-        if (!workModules.has(workModuleAnchor)) workModules.set(workModuleAnchor, 'work-module-' + ++nextWorkModule);
+        if (!workModules.has(workModuleAnchor))
+          workModules.set(workModuleAnchor, "work-module-" + ++nextWorkModule);
         context.workModuleId = workModules.get(workModuleAnchor);
       }
       return context;
@@ -640,7 +641,9 @@
     );
   }
   function mokaContextFor(el) {
-    const block = el.closest('[class*="apply-block-"],[class*="apply-blocks-"]'),
+    const block = el.closest(
+        '[class*="apply-block-"],[class*="apply-blocks-"]',
+      ),
       record = el.closest('[class*="apply-fields-"]');
     if (!block || !record) return null;
     const head = block.querySelector(':scope > [class*="blockTitle-"] > div');
@@ -762,8 +765,16 @@
     return "";
   }
   function descriptor(el, scope, config = {}) {
-    if (el.matches('.phoenix-select') && globalThis.ResumePlatforms?.identify()?.id === 'beisen')
-      config = { ...config, type: 'combobox', phoenixSelect: true, optionsSelector: '.phoenix-selectList__listItem' };
+    if (
+      el.matches(".phoenix-select") &&
+      globalThis.ResumePlatforms?.identify()?.id === "beisen"
+    )
+      config = {
+        ...config,
+        type: "combobox",
+        phoenixSelect: true,
+        optionsSelector: ".phoenix-selectList__listItem",
+      };
     if (el.matches(".el-cascader"))
       config = { ...config, type: "cascader", elementCascader: true };
     else if (el.matches(".el-select"))
@@ -817,7 +828,9 @@
       sectionIssues = [];
     const workflow = globalThis.ResumePlatforms?.inspect();
     const workflowBlocked = workflow && !workflow.canFill;
-    const visibleText = (workflowBlocked ? [] : ResumeLayout.collect(document)).filter(
+    const visibleText = (
+      workflowBlocked ? [] : ResumeLayout.collect(document)
+    ).filter(
       (n) =>
         !selectedScope || ResumeLayout.contains(selectedScope.root, n.parent),
     );
@@ -829,7 +842,11 @@
       const candidates = shown(
         s.scope,
         '[role="radiogroup"],[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,.phoenix-select,[class*="sd-Select-container-"],input,textarea,select,[contenteditable="true"]',
-      ).filter(el => !el.matches('.phoenix-select') || globalThis.ResumePlatforms?.identify()?.id === 'beisen');
+      ).filter(
+        (el) =>
+          !el.matches(".phoenix-select") ||
+          globalThis.ResumePlatforms?.identify()?.id === "beisen",
+      );
       const used = new Set();
       const add = (el, config = {}) => {
         const configuredControl =
@@ -893,7 +910,9 @@
           el.getAttribute("aria-label") ||
           linked.trim() ||
           structural.groupLabel ||
-          (el.closest("dd")?.previousElementSibling?.matches("dt") ? structural.label : null) ||
+          (el.closest("dd")?.previousElementSibling?.matches("dt")
+            ? structural.label
+            : null) ||
           labels[0] ||
           globalThis.ResumePlatforms?.label(el) ||
           structural.label ||
@@ -903,7 +922,12 @@
           el.name ||
           el.id ||
           "未命名字段";
-        const explicitLabel = config.label || effectiveMokaLabel || el.getAttribute("aria-label") || linked.trim() || globalThis.ResumePlatforms?.label(el);
+        const explicitLabel =
+          config.label ||
+          effectiveMokaLabel ||
+          el.getAttribute("aria-label") ||
+          linked.trim() ||
+          globalThis.ResumePlatforms?.label(el);
         const tokens = explicitLabel
           ? [explicitLabel]
           : [
@@ -927,23 +951,75 @@
             ? { shadowScope: shadowDocumentKey + ":" + rootId(el) }
             : {}),
           label,
-          labelProvenance: config.label ? "adapter" : effectiveMokaLabel ? "container" :
-            el.getAttribute("aria-label") ? "aria-label" : linked.trim() ? "aria-labelledby" :
-            structural.groupLabel ? (el.closest('[role="radiogroup"],fieldset')?.querySelector(':scope > legend')?.textContent.trim() === structural.groupLabel ? "legend" : "group") :
-            el.closest("dd")?.previousElementSibling?.matches("dt") && structural.label ? "dt-dd" :
-            labels[0] ? "label" : globalThis.ResumePlatforms?.label(el) ? "platform-container" :
-            structural.label ? (el.closest("dd")?.previousElementSibling?.matches("dt") && structural.evidence === "定义列表标签" ? "dt-dd" : "structure") :
-            containerLabels[0] ? "container" : inferred.label ? "geometry" : el.placeholder ? "placeholder" : "attribute",
+          labelProvenance: config.label
+            ? "adapter"
+            : effectiveMokaLabel
+              ? "container"
+              : el.getAttribute("aria-label")
+                ? "aria-label"
+                : linked.trim()
+                  ? "aria-labelledby"
+                  : structural.groupLabel
+                    ? el
+                        .closest('[role="radiogroup"],fieldset')
+                        ?.querySelector(":scope > legend")
+                        ?.textContent.trim() === structural.groupLabel
+                      ? "legend"
+                      : "group"
+                    : el.closest("dd")?.previousElementSibling?.matches("dt") &&
+                        structural.label
+                      ? "dt-dd"
+                      : labels[0]
+                        ? "label"
+                        : globalThis.ResumePlatforms?.label(el)
+                          ? "platform-container"
+                          : structural.label
+                            ? el
+                                .closest("dd")
+                                ?.previousElementSibling?.matches("dt") &&
+                              structural.evidence === "定义列表标签"
+                              ? "dt-dd"
+                              : "structure"
+                            : containerLabels[0]
+                              ? "container"
+                              : inferred.label
+                                ? "geometry"
+                                : el.placeholder
+                                  ? "placeholder"
+                                  : "attribute",
           name: el.name || "",
           placeholder: el.placeholder || "",
           htmlType: el.getAttribute("type") || "",
-          valueType: d.type === "input" ? ({tel:"phone",email:"email",url:"url",number:"number",password:"password"})[el.type] || "text" : d.type,
+          valueType:
+            d.type === "input"
+              ? {
+                  tel: "phone",
+                  email: "email",
+                  url: "url",
+                  number: "number",
+                  password: "password",
+                }[el.type] || "text"
+              : d.type,
           visible: ResumeLayout.visible(el),
-          component: el.closest('.el-input,.el-select,.el-cascader,.el-date-editor') ? "element" :
-            el.closest('.ant-input,.ant-select,.ant-picker') ? "ant" :
-            el.closest('.ivu-input-wrapper,.ivu-select,.ivu-date-picker') ? "iview" :
-            d.config.phoenixSelect ? "phoenix" : d.config.mokaSelect ? "moka" : d.config.layuiSelect ? "layui" :
-            el.closest('[class*="sd-Dropdown-container"],[class*="sd-Input-container"]') ? "semi" : "native",
+          component: el.closest(
+            ".el-input,.el-select,.el-cascader,.el-date-editor",
+          )
+            ? "element"
+            : el.closest(".ant-input,.ant-select,.ant-picker")
+              ? "ant"
+              : el.closest(".ivu-input-wrapper,.ivu-select,.ivu-date-picker")
+                ? "iview"
+                : d.config.phoenixSelect
+                  ? "phoenix"
+                  : d.config.mokaSelect
+                    ? "moka"
+                    : d.config.layuiSelect
+                      ? "layui"
+                      : el.closest(
+                            '[class*="sd-Dropdown-container"],[class*="sd-Input-container"]',
+                          )
+                        ? "semi"
+                        : "native",
           tokens: tokens.length
             ? tokens
             : [
@@ -962,7 +1038,7 @@
             !!el.required ||
             el.getAttribute("aria-required") === "true" ||
             !!container?.classList.contains("is-required") ||
-            !!container?.querySelector('.form-item__required') ||
+            !!container?.querySelector(".form-item__required") ||
             !!container?.querySelector(
               ':scope > [class*="title-"] [class*="required-asterisk-"]',
             ),
@@ -1111,8 +1187,14 @@
           };
         }
         field.stableId = stableIds.get(el);
-        field.identity = {label:field.label,name:field.name,id:el.id || "",
-          placeholder:field.placeholder,type:field.type,valueType:field.valueType};
+        field.identity = {
+          label: field.label,
+          name: field.name,
+          id: el.id || "",
+          placeholder: field.placeholder,
+          type: field.type,
+          valueType: field.valueType,
+        };
         field.fingerprint = A.fingerprint([field]);
         field.risk = ResumeMatcher.decide(field, {}).risk;
         field.position = {
@@ -1181,7 +1263,10 @@
       candidates.forEach((el) => {
         if (
           !el.parentElement?.closest(
-            '[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"],[contenteditable="true"]' + (globalThis.ResumePlatforms?.identify()?.id === 'beisen' ? ',.phoenix-select' : ''),
+            '[role="combobox"],.el-select,.el-cascader,.ant-select,.ivu-select,[class*="sd-Select-container-"],[contenteditable="true"]' +
+              (globalThis.ResumePlatforms?.identify()?.id === "beisen"
+                ? ",.phoenix-select"
+                : ""),
           )
         )
           add(el);
@@ -1362,259 +1447,383 @@
     }
     return results;
   }
-  function rebindKey({field:f}) {
-    return JSON.stringify([f.label,f.name,f.htmlType,f.placeholder,f.type,f.valueType,
-      f.section,f.recordIndex,f.path,f.context,f.familyRole,f.workModuleId,
-      f.datePart,f.datePath,f.regionRole,f.regionLevel,f.required]);
+  function rebindKey({ field: f }) {
+    return JSON.stringify([
+      f.label,
+      f.name,
+      f.htmlType,
+      f.placeholder,
+      f.type,
+      f.valueType,
+      f.section,
+      f.recordIndex,
+      f.path,
+      f.context,
+      f.familyRole,
+      f.workModuleId,
+      f.datePart,
+      f.datePath,
+      f.regionRole,
+      f.regionLevel,
+      f.required,
+    ]);
   }
   function watchForm(entries, signal) {
-    const candidates = [...new Set(entries.map(d => selectedScope?.root ||
-      (d.root?.host ? d.root : d.el.closest('form,main,section,fieldset') || d.el.parentElement)))]
-      .filter(root => root && root !== document && root !== document.body);
-    const roots = candidates.filter(root => !candidates.some(other => other !== root && ResumeLayout.contains(other,root)));
+    const candidates = [
+      ...new Set(
+        entries.map(
+          (d) =>
+            selectedScope?.root ||
+            (d.root?.host
+              ? d.root
+              : d.el.closest("form,main,section,fieldset") ||
+                d.el.parentElement),
+        ),
+      ),
+    ].filter((root) => root && root !== document && root !== document.body);
+    const roots = candidates.filter(
+      (root) =>
+        !candidates.some(
+          (other) => other !== root && ResumeLayout.contains(other, root),
+        ),
+    );
     const observers = [];
-    let lastActivity = performance.now(), mutations = 0, resources = 0, resourceObserver, disconnected = false;
-    const changed = records => {mutations += records.length; lastActivity = performance.now();};
+    let lastActivity = performance.now(),
+      mutations = 0,
+      resources = 0,
+      resourceObserver,
+      disconnected = false;
+    const changed = (records) => {
+      mutations += records.length;
+      lastActivity = performance.now();
+    };
     for (const root of roots) {
       const observer = new MutationObserver(changed);
-      observer.observe(root,{attributes:true,childList:true,characterData:true,subtree:true,
-        attributeFilter:['hidden','inert','aria-hidden','aria-label','aria-labelledby','aria-required','aria-invalid','class','style','type','name','id','placeholder','required']});
+      observer.observe(root, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true,
+        attributeFilter: [
+          "hidden",
+          "inert",
+          "aria-hidden",
+          "aria-label",
+          "aria-labelledby",
+          "aria-required",
+          "aria-invalid",
+          "class",
+          "style",
+          "type",
+          "name",
+          "id",
+          "placeholder",
+          "required",
+        ],
+      });
       observers.push(observer);
     }
     try {
-      resourceObserver = new PerformanceObserver(list => {resources += list.getEntries().length;lastActivity = performance.now();});
-      resourceObserver.observe({entryTypes:['resource']});
+      resourceObserver = new PerformanceObserver((list) => {
+        resources += list.getEntries().length;
+        lastActivity = performance.now();
+      });
+      resourceObserver.observe({ entryTypes: ["resource"] });
     } catch {}
     const disconnect = () => {
       if (disconnected) return;
       disconnected = true;
-      observers.forEach(observer => observer.disconnect());
+      observers.forEach((observer) => observer.disconnect());
       resourceObserver?.disconnect();
-      signal.removeEventListener('abort',disconnect);
+      signal.removeEventListener("abort", disconnect);
     };
-    signal.addEventListener('abort',disconnect,{once:true});
-    return {roots,disconnect,async settle(){
-      const start = performance.now();
-      while (!signal.aborted && performance.now()-lastActivity < 150 && performance.now()-start < 1200)
-        await new Promise(resolve => setTimeout(resolve,50));
-      return {mutations,resources,timedOut:!signal.aborted && performance.now()-lastActivity < 150};
-    }};
+    signal.addEventListener("abort", disconnect, { once: true });
+    return {
+      roots,
+      disconnect,
+      async settle() {
+        const start = performance.now();
+        while (
+          !signal.aborted &&
+          performance.now() - lastActivity < 150 &&
+          performance.now() - start < 1200
+        )
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        return {
+          mutations,
+          resources,
+          timedOut: !signal.aborted && performance.now() - lastActivity < 150,
+        };
+      },
+    };
   }
   async function fill(message) {
     globalThis.ResumePlatforms?.assertReady();
     if (location.href !== scannedUrl) throw Error("页面地址已变化，请重新扫描");
     operationController = new AbortController();
     const original = [...registry.values()];
-    const watcher = watchForm(original,operationController.signal);
+    const watcher = watchForm(original, operationController.signal);
     try {
-    let rescans = 0;
-    function rebind(d) {
-      if (rescans >= 3 || message.saveCards || location.href !== scannedUrl ||
-          operationController.signal.aborted || d.ocrGuard || !d.sectionScope.scope.isConnected)
-        return null;
-      const key = rebindKey(d);
-      const same = candidate => candidate.root === d.root &&
-        candidate.sectionScope.scope === d.sectionScope.scope && rebindKey(candidate) === key;
-      if (original.filter(same).length !== 1) return null;
-      const before = registry, previousRevision = revision;
-      let matches;
-      try {
-        rescans++;
-        scan();
-        matches = [...registry.values()].filter(same);
-      } finally {
-        registry = before;
-        revision = previousRevision;
+      let rescans = 0;
+      function rebind(d) {
+        if (
+          rescans >= 3 ||
+          message.saveCards ||
+          location.href !== scannedUrl ||
+          operationController.signal.aborted ||
+          d.ocrGuard ||
+          !d.sectionScope.scope.isConnected
+        )
+          return null;
+        const key = rebindKey(d);
+        const same = (candidate) =>
+          candidate.root === d.root &&
+          candidate.sectionScope.scope === d.sectionScope.scope &&
+          rebindKey(candidate) === key;
+        if (original.filter(same).length !== 1) return null;
+        const before = registry,
+          previousRevision = revision;
+        let matches;
+        try {
+          rescans++;
+          scan();
+          matches = [...registry.values()].filter(same);
+        } finally {
+          registry = before;
+          revision = previousRevision;
+        }
+        const next = matches[0];
+        if (
+          matches.length !== 1 ||
+          next.field.ambiguousLabel ||
+          next.field.contextBlocked ||
+          next.field.familyAmbiguous ||
+          next.field.workBindingRequired ||
+          ResumeMatcher.decide(next.field, {}).action === "block"
+        )
+          return null;
+        return { ...next, field: { ...next.field, id: d.field.id } };
       }
-      const next = matches[0];
-      if (matches.length !== 1 || next.field.ambiguousLabel || next.field.contextBlocked ||
-          next.field.familyAmbiguous || next.field.workBindingRequired ||
-          ResumeMatcher.decide(next.field, {}).action === "block") return null;
-      return {...next, field:{...next.field,id:d.field.id}};
-    }
-    const results = [],
-      touched = new Map(),
-      originals = new Map();
-    for (const item of message.items) {
-      try {
-        chrome.runtime
-          .sendMessage?.({
-            type: "RF_FILL_PROGRESS",
-            progressId: message.progressId,
-            completed: results.length + 1,
-            total: message.items.length,
-          })
-          ?.catch(() => {});
-      } catch {}
-      let d = registry.get(item.id);
-      if (!d) {
-        results.push({ id: item.id, status: "stale", error: "扫描已失效" });
-        continue;
-      }
-      if (!d.el.isConnected && !item.verifyOnly) {
-        const next = rebind(d);
-        if (!next) {
-          results.push({id:item.id,status:"stale",error:"控件已变化，请重新扫描"});
+      const results = [],
+        touched = new Map(),
+        originals = new Map();
+      for (const item of message.items) {
+        try {
+          chrome.runtime
+            .sendMessage?.({
+              type: "RF_FILL_PROGRESS",
+              progressId: message.progressId,
+              completed: results.length + 1,
+              total: message.items.length,
+            })
+            ?.catch(() => {});
+        } catch {}
+        let d = registry.get(item.id);
+        if (!d) {
+          results.push({ id: item.id, status: "stale", error: "扫描已失效" });
           continue;
         }
-        d = next;
-        registry.set(item.id,d);
-      }
-      if (
-        (selectedScope ||
-          d.field.workModuleId ||
-          ResumeMatcher.isFamilyField(d.field)) &&
-        (!item.path || !ResumeMatcher.allowedPath(d.field, item.path))
-      ) {
-        results.push({
-          id: item.id,
-          status: "failed",
-          error: "资料路径不属于当前成员或所选经历",
-        });
-        continue;
-      }
-      d.referenceData = item.referenceData || null;
-      d.sourcePath = item.path;
-      d.manualOption = item.manualOption === true;
-      d.signal = operationController.signal;
-      if (d.signal.aborted) {
-        results.push({ id: item.id, status: "failed", error: "操作已取消" });
-        continue;
-      }
-      try {
-        if (!item.verifyOnly) originals.set(item.id, C.read(d));
-        const r = item.verifyOnly
-          ? await C.verify(d, item.value)
-          : await C.fill(d, item.value, message.overwrite);
-        results.push({ id: item.id, ...r });
-        if (r.status === "filled" || r.status === "verified") {
-          const key = d.sectionScope.scope;
-          touched.set(key, d.sectionScope);
-        }
-      } catch (e) {
-        let candidates = [];
-        try {
-          candidates = C.candidates(d);
-        } catch {}
-        results.push({
-          id: item.id,
-          status: "failed",
-          error: e.message,
-          ...(e.code ? { code: e.code } : {}),
-          candidates,
-          ...(e.diagnostic ? { diagnostic: e.diagnostic } : {}),
-        });
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    const settled = await watcher.settle();
-    const previousRegistry = registry, previousRevision = revision;
-    let live = new Map();
-    try {
-      scan();
-      live = new Map([...registry.values()].map(entry => [entry.el, entry]));
-    } finally {
-      registry = previousRegistry;
-      revision = previousRevision;
-    }
-    const known = new Set(original.map(d => d.field.stableId));
-    const discovered = [...live.values()].filter(d => !known.has(d.field.stableId) &&
-      watcher.roots.some(root => ResumeLayout.contains(root,d.el)));
-    const adaptation = {...settled,newFields:discovered.slice(0,50).map(({field:f}) => ({
-      stableId:f.stableId,label:f.label,type:f.type,section:f.section,recordIndex:f.recordIndex})),
-      limited:discovered.length > 50,requiresReview:discovered.length > 0};
-    for (const item of message.items) {
-      const result = results.find((r) => r.id === item.id),
-        d = registry.get(item.id);
-      if (result?.status === "filled") {
-        try {
-          const refreshed = d.config.layuiSelect ? await C.verify(d, item.value) : null;
-          const current = live.get(d.el);
-          if (!current || rebindKey(current) !== rebindKey(d)) {
-            let restored = false;
-            if (current && d.type === "input" && current.type === "input" &&
-                !d.config.datePanel && !d.config.referencePicker &&
-                ResumeMatcher.decide(current.field, {}).action !== "block" &&
-                C.read(current) === String(item.value) &&
-                originals.has(item.id) && !operationController.signal.aborted) {
-              await C.fill(current, originals.get(item.id), true);
-              restored = (await C.verify(current, originals.get(item.id))).status === "verified";
-            }
-            Object.assign(result, {status:"stale",error:restored ?
-              "字段语义已变化，已恢复原值，请重新核对" :
-              "字段语义已变化，请重新核对；未恢复当前内容"});
+        if (!d.el.isConnected && !item.verifyOnly) {
+          const next = rebind(d);
+          if (!next) {
+            results.push({
+              id: item.id,
+              status: "stale",
+              error: "控件已变化，请重新扫描",
+            });
             continue;
           }
-          Object.assign(result, refreshed || await C.verify(d, item.value));
-        } catch (e) {
-          Object.assign(result, { status: "unconfirmed", error: e.message });
+          d = next;
+          registry.set(item.id, d);
         }
-      }
-    }
-    const saves = [];
-    if (message.saveCards && !operationController.signal.aborted)
-      for (const s of touched.values()) {
-        if (!s.config.saveButton) continue;
-        const own = message.items.filter(
-          (i) => registry.get(i.id)?.sectionScope.scope === s.scope,
-        );
-        const unresolved = Array.from(registry.values())
-          .filter((d) => d.sectionScope.scope === s.scope && d.field.required)
-          .some((d) => !own.some((i) => i.id === d.field.id));
         if (
-          unresolved ||
-          own.some(
-            (i) => results.find((r) => r.id === i.id)?.status !== "verified",
-          )
+          (selectedScope ||
+            d.field.workModuleId ||
+            ResumeMatcher.isFamilyField(d.field)) &&
+          (!item.path || !ResumeMatcher.allowedPath(d.field, item.path))
         ) {
-          saves.push({
-            section: s.key,
-            index: s.index,
-            status: "blocked",
-            error: "存在必填遗漏或回读未通过，未保存",
+          results.push({
+            id: item.id,
+            status: "failed",
+            error: "资料路径不属于当前成员或所选经历",
           });
           continue;
         }
+        d.referenceData = item.referenceData || null;
+        d.sourcePath = item.path;
+        d.manualOption = item.manualOption === true;
+        d.signal = operationController.signal;
+        if (d.signal.aborted) {
+          results.push({ id: item.id, status: "failed", error: "操作已取消" });
+          continue;
+        }
         try {
-          const before = s.config.savedSelector
-              ? shown(s.scope, s.config.savedSelector)[0]
-              : null,
-            beforeText = before?.textContent;
-          await clickAction(s.scope, s.config.saveButton);
-          if (!s.config.savedSelector)
-            throw Error("已点击保存，但没有 savedSelector，无法确认保存状态");
-          await C.waitFor(() => {
-            const markers = shown(
-              s.scope.isConnected ? s.scope : s.root,
-              s.config.savedSelector,
-            );
-            return (
-              markers.length === 1 &&
-              (markers[0] !== before || markers[0].textContent !== beforeText)
-            );
-          }, s.config.timeoutMs || 2500);
-          saves.push({
-            section: s.key,
-            index: s.index,
-            status: "save_indicator_observed",
-          });
+          if (!item.verifyOnly) originals.set(item.id, C.read(d));
+          const r = item.verifyOnly
+            ? await C.verify(d, item.value)
+            : await C.fill(d, item.value, message.overwrite);
+          results.push({ id: item.id, ...r });
+          if (r.status === "filled" || r.status === "verified") {
+            const key = d.sectionScope.scope;
+            touched.set(key, d.sectionScope);
+          }
         } catch (e) {
-          saves.push({
-            section: s.key,
-            index: s.index,
-            status: "unconfirmed",
+          let candidates = [];
+          try {
+            candidates = C.candidates(d);
+          } catch {}
+          results.push({
+            id: item.id,
+            status: "failed",
             error: e.message,
+            ...(e.code ? { code: e.code } : {}),
+            candidates,
+            ...(e.diagnostic ? { diagnostic: e.diagnostic } : {}),
           });
         }
       }
-    lastFillReport = {
-      url: location.href,
-      revision,
-      entries: message.items.map(item => ({descriptor: registry.get(item.id),
-        expected: item.value, status: results.find(result => result.id === item.id)?.status})),
-    };
-    return { results, saves, adaptation, submissionVerified: false };
-    } finally { watcher.disconnect(); }
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const settled = await watcher.settle();
+      const previousRegistry = registry,
+        previousRevision = revision;
+      let live = new Map();
+      try {
+        scan();
+        live = new Map(
+          [...registry.values()].map((entry) => [entry.el, entry]),
+        );
+      } finally {
+        registry = previousRegistry;
+        revision = previousRevision;
+      }
+      const known = new Set(original.map((d) => d.field.stableId));
+      const discovered = [...live.values()].filter(
+        (d) =>
+          !known.has(d.field.stableId) &&
+          watcher.roots.some((root) => ResumeLayout.contains(root, d.el)),
+      );
+      const adaptation = {
+        ...settled,
+        newFields: discovered.slice(0, 50).map(({ field: f }) => ({
+          stableId: f.stableId,
+          label: f.label,
+          type: f.type,
+          section: f.section,
+          recordIndex: f.recordIndex,
+        })),
+        limited: discovered.length > 50,
+        requiresReview: discovered.length > 0,
+      };
+      for (const item of message.items) {
+        const result = results.find((r) => r.id === item.id),
+          d = registry.get(item.id);
+        if (result?.status === "filled") {
+          try {
+            const refreshed = d.config.layuiSelect
+              ? await C.verify(d, item.value)
+              : null;
+            const current = live.get(d.el);
+            if (!current || rebindKey(current) !== rebindKey(d)) {
+              let restored = false;
+              if (
+                current &&
+                d.type === "input" &&
+                current.type === "input" &&
+                !d.config.datePanel &&
+                !d.config.referencePicker &&
+                ResumeMatcher.decide(current.field, {}).action !== "block" &&
+                C.read(current) === String(item.value) &&
+                originals.has(item.id) &&
+                !operationController.signal.aborted
+              ) {
+                await C.fill(current, originals.get(item.id), true);
+                restored =
+                  (await C.verify(current, originals.get(item.id))).status ===
+                  "verified";
+              }
+              Object.assign(result, {
+                status: "stale",
+                error: restored
+                  ? "字段语义已变化，已恢复原值，请重新核对"
+                  : "字段语义已变化，请重新核对；未恢复当前内容",
+              });
+              continue;
+            }
+            Object.assign(result, refreshed || (await C.verify(d, item.value)));
+          } catch (e) {
+            Object.assign(result, { status: "unconfirmed", error: e.message });
+          }
+        }
+      }
+      const saves = [];
+      if (message.saveCards && !operationController.signal.aborted)
+        for (const s of touched.values()) {
+          if (!s.config.saveButton) continue;
+          const own = message.items.filter(
+            (i) => registry.get(i.id)?.sectionScope.scope === s.scope,
+          );
+          const unresolved = Array.from(registry.values())
+            .filter((d) => d.sectionScope.scope === s.scope && d.field.required)
+            .some((d) => !own.some((i) => i.id === d.field.id));
+          if (
+            unresolved ||
+            own.some(
+              (i) => results.find((r) => r.id === i.id)?.status !== "verified",
+            )
+          ) {
+            saves.push({
+              section: s.key,
+              index: s.index,
+              status: "blocked",
+              error: "存在必填遗漏或回读未通过，未保存",
+            });
+            continue;
+          }
+          try {
+            const before = s.config.savedSelector
+                ? shown(s.scope, s.config.savedSelector)[0]
+                : null,
+              beforeText = before?.textContent;
+            await clickAction(s.scope, s.config.saveButton);
+            if (!s.config.savedSelector)
+              throw Error("已点击保存，但没有 savedSelector，无法确认保存状态");
+            await C.waitFor(() => {
+              const markers = shown(
+                s.scope.isConnected ? s.scope : s.root,
+                s.config.savedSelector,
+              );
+              return (
+                markers.length === 1 &&
+                (markers[0] !== before || markers[0].textContent !== beforeText)
+              );
+            }, s.config.timeoutMs || 2500);
+            saves.push({
+              section: s.key,
+              index: s.index,
+              status: "save_indicator_observed",
+            });
+          } catch (e) {
+            saves.push({
+              section: s.key,
+              index: s.index,
+              status: "unconfirmed",
+              error: e.message,
+            });
+          }
+        }
+      lastFillReport = {
+        url: location.href,
+        revision,
+        entries: message.items.map((item) => ({
+          descriptor: registry.get(item.id),
+          expected: item.value,
+          status: results.find((result) => result.id === item.id)?.status,
+        })),
+      };
+      return { results, saves, adaptation, submissionVerified: false };
+    } finally {
+      watcher.disconnect();
+    }
   }
   globalThis.ResumeFillPage = {
     isBusy: () => busy,
@@ -1716,101 +1925,244 @@
   function resumeFileTarget(input) {
     const platformOwner = globalThis.ResumePlatforms?.attachmentOwner(input);
     if (platformOwner) return { input, label: platformOwner.label };
-    if (!input.parentElement || !ResumeLayout.visible(input.parentElement)) return null;
+    if (!input.parentElement || !ResumeLayout.visible(input.parentElement))
+      return null;
     const labels = Array.from(input.labels || []).filter(ResumeLayout.visible);
-    const wrapper = input.closest('.el-upload,.ant-upload,.ivu-upload,.semi-upload,[data-resume-upload]');
-    const owner = labels[0] || (wrapper && ResumeLayout.visible(wrapper) && wrapper);
+    const wrapper = input.closest(
+      ".el-upload,.ant-upload,.ivu-upload,.semi-upload,[data-resume-upload]",
+    );
+    const owner =
+      labels[0] || (wrapper && ResumeLayout.visible(wrapper) && wrapper);
     if (!ResumeLayout.visible(input) && !owner) return null;
-    if (wrapper && query(wrapper,'input[type="file"]').length !== 1) return null;
-    const label = [...labels.map(text),input.getAttribute('aria-label'),
-      wrapper?.getAttribute('aria-label')].filter(Boolean).join(' ');
-    return /简历|\b(?:resume|cv)\b/i.test(label) ? {input,label} : null;
+    if (wrapper && query(wrapper, 'input[type="file"]').length !== 1)
+      return null;
+    const label = [
+      ...labels.map(text),
+      input.getAttribute("aria-label"),
+      wrapper?.getAttribute("aria-label"),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return /简历|\b(?:resume|cv)\b/i.test(label) ? { input, label } : null;
   }
   async function preflight() {
-    if (!scannedUrl || scannedUrl !== location.href) throw Error("请重新扫描当前表单");
-    const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
-    const collect = selector => [...new Set(roots.flatMap(root => shown(root, selector)))];
-    const entries = new Map([...registry.values()].map(item => [item.el,item]));
+    if (!scannedUrl || scannedUrl !== location.href)
+      throw Error("请重新扫描当前表单");
+    const roots = selectedScope
+      ? [selectedScope.root]
+      : scopes(activeAdapter)
+          .map((s) => s.scope)
+          .filter(Boolean);
+    const collect = (selector) => [
+      ...new Set(roots.flatMap((root) => shown(root, selector))),
+    ];
+    const entries = new Map(
+      [...registry.values()].map((item) => [item.el, item]),
+    );
     const issues = [];
     const workflow = globalThis.ResumePlatforms?.inspect();
-    if (workflow && !workflow.canFill) issues.push({code:'platform-handoff',label:globalThis.ResumePlatforms.summary(workflow)});
-    const challenges = collect('[autocomplete="one-time-code"],[data-sitekey],iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"],[class*="captcha"],[id*="captcha"]');
-    if (challenges.length) issues.push({code:'challenge',label:'可见验证码或安全挑战，请在网页人工完成'});
-    if (lastFillReport?.url === location.href && lastFillReport.revision === revision) {
-      const savedRegistry = registry, savedRevision = revision;
+    if (workflow && !workflow.canFill)
+      issues.push({
+        code: "platform-handoff",
+        label: globalThis.ResumePlatforms.summary(workflow),
+      });
+    const challenges = collect(
+      '[autocomplete="one-time-code"],[data-sitekey],iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="challenges.cloudflare.com"],[class*="captcha"],[id*="captcha"]',
+    );
+    if (challenges.length)
+      issues.push({
+        code: "challenge",
+        label: "可见验证码或安全挑战，请在网页人工完成",
+      });
+    if (
+      lastFillReport?.url === location.href &&
+      lastFillReport.revision === revision
+    ) {
+      const savedRegistry = registry,
+        savedRevision = revision;
       let current;
-      try { scan(); current = new Map([...registry.values()].map(entry => [entry.el,entry])); }
-      finally { registry = savedRegistry; revision = savedRevision; }
-      for (const {descriptor:d,expected,status} of lastFillReport.entries) {
+      try {
+        scan();
+        current = new Map(
+          [...registry.values()].map((entry) => [entry.el, entry]),
+        );
+      } finally {
+        registry = savedRegistry;
+        revision = savedRevision;
+      }
+      for (const {
+        descriptor: d,
+        expected,
+        status,
+      } of lastFillReport.entries) {
         if (!d) continue;
-        if (!d.el.isConnected) {issues.push({code:'unconfirmed',label:d.field.label});continue;}
-        if (!roots.some(root => ResumeLayout.contains(root,d.el)) || !ResumeLayout.visible(d.el)) continue;
+        if (!d.el.isConnected) {
+          issues.push({ code: "unconfirmed", label: d.field.label });
+          continue;
+        }
+        if (
+          !roots.some((root) => ResumeLayout.contains(root, d.el)) ||
+          !ResumeLayout.visible(d.el)
+        )
+          continue;
         const live = current.get(d.el);
         if (!live || rebindKey(live) !== rebindKey(d))
-          issues.push({code:'semantic-drift',label:d.field.label});
-        else if (status !== 'verified') issues.push({code:'unconfirmed',label:d.field.label});
+          issues.push({ code: "semantic-drift", label: d.field.label });
+        else if (status !== "verified")
+          issues.push({ code: "unconfirmed", label: d.field.label });
         else {
           try {
-            if ((await C.verify(d,expected)).status !== 'verified')
-              issues.push({code:'readback-changed',label:d.field.label});
-          } catch { issues.push({code:'unconfirmed',label:d.field.label}); }
+            if ((await C.verify(d, expected)).status !== "verified")
+              issues.push({ code: "readback-changed", label: d.field.label });
+          } catch {
+            issues.push({ code: "unconfirmed", label: d.field.label });
+          }
         }
       }
     }
-    for (const el of new Set([...collect('input,textarea,select,[aria-required="true"]'),
-      ...[...entries.keys()].filter(el => roots.some(root => ResumeLayout.contains(root,el)) && ResumeLayout.visible(el))])) {
-      if (el.matches(':disabled,[aria-disabled="true"],[type="hidden"]')) continue;
+    for (const el of new Set([
+      ...collect('input,textarea,select,[aria-required="true"]'),
+      ...[...entries.keys()].filter(
+        (el) =>
+          roots.some((root) => ResumeLayout.contains(root, el)) &&
+          ResumeLayout.visible(el),
+      ),
+    ])) {
+      if (el.matches(':disabled,[aria-disabled="true"],[type="hidden"]'))
+        continue;
       const entry = entries.get(el);
-      const label = (entry?.field.label || el.getAttribute('aria-label') || text(el.labels?.[0]) || '未命名字段').slice(0,100);
-      const empty = el.type === 'file' ? !el.files.length :
-        ['radio','checkbox'].includes(el.type) ? !el.checked && (el.type !== 'radio' || el.validity?.valueMissing) :
-        !String(entry ? C.read(entry) : el.value ?? '').trim();
-      if ((el.required || el.getAttribute('aria-required') === 'true' || entry?.field.required) && empty)
-        issues.push({code:'required-empty',label});
-      else if (el.validity?.valid === false || el.getAttribute('aria-invalid') === 'true')
-        issues.push({code:'invalid',label});
+      const label = (
+        entry?.field.label ||
+        el.getAttribute("aria-label") ||
+        text(el.labels?.[0]) ||
+        "未命名字段"
+      ).slice(0, 100);
+      const empty =
+        el.type === "file"
+          ? !el.files.length
+          : ["radio", "checkbox"].includes(el.type)
+            ? !el.checked && (el.type !== "radio" || el.validity?.valueMissing)
+            : !String(entry ? C.read(entry) : (el.value ?? "")).trim();
+      if (
+        (el.required ||
+          el.getAttribute("aria-required") === "true" ||
+          entry?.field.required) &&
+        empty
+      )
+        issues.push({ code: "required-empty", label });
+      else if (
+        el.validity?.valid === false ||
+        el.getAttribute("aria-invalid") === "true"
+      )
+        issues.push({ code: "invalid", label });
     }
-    const candidates = collect('button,input[type="submit"],input[type="button"]')
-      .filter(el => !el.matches(':disabled,[aria-disabled="true"]'))
-      .map(el => (el.getAttribute('aria-label') || text(el) || (el.tagName === 'INPUT' ? el.value : '')).slice(0,100))
-      .filter(label => /submit|apply|send|提交|投递|申请|发送/i.test(label)).slice(0,5);
-    return {issues,candidates,submissionVerified:false};
+    const candidates = collect(
+      'button,input[type="submit"],input[type="button"]',
+    )
+      .filter((el) => !el.matches(':disabled,[aria-disabled="true"]'))
+      .map((el) =>
+        (
+          el.getAttribute("aria-label") ||
+          text(el) ||
+          (el.tagName === "INPUT" ? el.value : "")
+        ).slice(0, 100),
+      )
+      .filter((label) => /submit|apply|send|提交|投递|申请|发送/i.test(label))
+      .slice(0, 5);
+    return { issues, candidates, submissionVerified: false };
   }
   function resumeAttachment(message) {
     globalThis.ResumePlatforms?.assertReady();
-    if (!scannedUrl || location.href !== scannedUrl) throw Error("请重新扫描当前表单");
-    const roots = selectedScope ? [selectedScope.root] : scopes(activeAdapter).map(s => s.scope).filter(Boolean);
-    const candidates = [...new Set(roots.flatMap(root => query(root, 'input[type="file"]')))].filter(el =>
-      !el.matches(':disabled,[aria-disabled="true"]') && !el.files.length &&
-      (!el.accept || el.accept.split(',').some(s => ['.pdf','application/pdf','application/*'].includes(s.trim().toLowerCase()))))
-      .map(resumeFileTarget).filter(Boolean);
+    if (!scannedUrl || location.href !== scannedUrl)
+      throw Error("请重新扫描当前表单");
+    const roots = selectedScope
+      ? [selectedScope.root]
+      : scopes(activeAdapter)
+          .map((s) => s.scope)
+          .filter(Boolean);
+    const candidates = [
+      ...new Set(roots.flatMap((root) => query(root, 'input[type="file"]'))),
+    ]
+      .filter(
+        (el) =>
+          !el.matches(':disabled,[aria-disabled="true"]') &&
+          !el.files.length &&
+          (!el.accept ||
+            el.accept
+              .split(",")
+              .some((s) =>
+                [".pdf", "application/pdf", "application/*"].includes(
+                  s.trim().toLowerCase(),
+                ),
+              )),
+      )
+      .map(resumeFileTarget)
+      .filter(Boolean);
     if (candidates.length !== 1) throw Error("请在网页上手动选择简历附件");
-    const {input,label} = candidates[0];
+    const { input, label } = candidates[0];
     if (!message.dataBase64) {
-      const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte =>
-        byte.toString(16).padStart(2, "0")).join("");
-      pendingAttachment = { token, input, label, revision, expiresAt:Date.now()+300000 };
+      const token = Array.from(
+        crypto.getRandomValues(new Uint8Array(16)),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      ).join("");
+      pendingAttachment = {
+        token,
+        input,
+        label,
+        revision,
+        expiresAt: Date.now() + 300000,
+      };
       return { token };
     }
     const approved = pendingAttachment;
     pendingAttachment = null;
-    if (!approved || approved.token !== message.token || approved.input !== input || approved.label !== label ||
-        approved.revision !== revision || approved.expiresAt < Date.now())
+    if (
+      !approved ||
+      approved.token !== message.token ||
+      approved.input !== input ||
+      approved.label !== label ||
+      approved.revision !== revision ||
+      approved.expiresAt < Date.now()
+    )
       throw Error("附件栏已变化，请重新确认");
-    if (typeof message.fileName !== 'string' || !/\.pdf$/i.test(message.fileName) ||
-        !Number.isInteger(message.size) || message.size < 8 || message.size > 15 * 1024 * 1024 ||
-        message.dataBase64.length > 20 * 1024 * 1024) throw Error("无效的 PDF 附件");
+    if (
+      typeof message.fileName !== "string" ||
+      !/\.pdf$/i.test(message.fileName) ||
+      !Number.isInteger(message.size) ||
+      message.size < 8 ||
+      message.size > 15 * 1024 * 1024 ||
+      message.dataBase64.length > 20 * 1024 * 1024
+    )
+      throw Error("无效的 PDF 附件");
     const raw = atob(message.dataBase64);
-    if (raw.length !== message.size || !raw.startsWith('%PDF-')) throw Error("无效的 PDF 附件");
+    if (raw.length !== message.size || !raw.startsWith("%PDF-"))
+      throw Error("无效的 PDF 附件");
     const win = input.ownerDocument.defaultView;
     const dt = new win.DataTransfer();
-    dt.items.add(new win.File([Uint8Array.from(raw, c => c.charCodeAt(0))], message.fileName, {type:'application/pdf'}));
+    dt.items.add(
+      new win.File(
+        [Uint8Array.from(raw, (c) => c.charCodeAt(0))],
+        message.fileName,
+        { type: "application/pdf" },
+      ),
+    );
     input.files = dt.files;
-    input.dispatchEvent(new win.Event('change', { bubbles:true, composed:true }));
-    const selected = input.isConnected && input.files[0]?.name === message.fileName && input.files[0]?.size === message.size;
-    const rescanRequired = globalThis.ResumePlatforms?.inspect()?.attachmentMode === 'parse-before-fill';
-    if (rescanRequired) { scannedUrl = ''; registry.clear(); revision++; }
-    return { selected, ...(rescanRequired ? {rescanRequired:true} : {}) };
+    input.dispatchEvent(
+      new win.Event("change", { bubbles: true, composed: true }),
+    );
+    const selected =
+      input.isConnected &&
+      input.files[0]?.name === message.fileName &&
+      input.files[0]?.size === message.size;
+    const rescanRequired =
+      globalThis.ResumePlatforms?.inspect()?.attachmentMode ===
+      "parse-before-fill";
+    if (rescanRequired) {
+      scannedUrl = "";
+      registry.clear();
+      revision++;
+    }
+    return { selected, ...(rescanRequired ? { rescanRequired: true } : {}) };
   }
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.type === "RF_CANCEL") {
